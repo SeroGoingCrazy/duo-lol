@@ -4,11 +4,12 @@
 
 - 需求：`docs/PRD.md`；术语：`CONTEXT.md`（写代码和注释时用里面的词）；决策：`docs/adr/`
 - 技术栈：Python（`data/`，抓取与统计）+ Next.js（`web/`，网站）
+- Python 用 uv 管理：`uv sync` 装依赖，`uv run ...` 运行，加依赖用 `uv add`，不要用 pip。Key 放在根目录 `.env`（照 `.env.example` 复制）。
 
 ## 红线
 
 - 只统计单双排（queue 420），只用美服数据。
-- `RIOT_API_KEY` 只从环境变量读，不能出现在代码、日志或前端里。
+- `RIOT_API_KEY` 只从 `.env` 或环境变量读，不能出现在代码、日志或前端里。
 - 遵守 Riot 限流（开发者 Key：20 次/秒、100 次/2 分钟），处理 429 和 Retry-After，查过的对局要缓存。
 - 预测算法沿用 DraftGap 的 Elo 分数相加（ADR-0001）。每一项都要能变成结果页上的一条理由，不加无法解释的魔法数字。
 - OP.GG 数据源必须和自有数据源可互换（ADR-0003），不要把它写死进模型代码。

@@ -2,8 +2,10 @@
 one's 20 most recent Solo/Duo games this season, store every participant. Resumable:
 already-stored matches are skipped.
 
-    RIOT_API_KEY=RGAPI-... python collect.py
-    RIOT_API_KEY=RGAPI-... python collect.py --tiers GOLD --players-per-tier 5   # smoke run
+    uv run python data/collect.py
+    uv run python data/collect.py --tiers GOLD --players-per-tier 5   # smoke run
+
+RIOT_API_KEY is read from the repo-root .env (copy .env.example).
 
 Per-player profiles at query time use player_profile.py (up to 100 games this season).
 """
