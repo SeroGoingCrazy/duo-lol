@@ -135,20 +135,25 @@ def predict_pair(source, a, b, gap_table=None):
     }
 
 
+def points(elo):
+    """Signed whole points for a reason line; never '-0'."""
+    return f"{round(elo) + 0:+d}"
+
+
 def reasons(best, n_options):
     top = best["combos"][0]
     t = top["terms"]
     out = [
         f"位置组合：{best['role_a']} + {best['role_b']} 是 {n_options} 种可行分配里预测胜率最高的",
-        f"熟练度：{top['champion_a']} 贡献 {t['champion_a']:+.0f} 分，{top['champion_b']} 贡献 {t['champion_b']:+.0f} 分",
-        f"组合加成：{top['champion_a']} + {top['champion_b']} {t['synergy']:+.0f} 分（全服 {top['pair_games']} 局样本）",
+        f"熟练度：{top['champion_a']} 贡献 {points(t['champion_a'])} 分，{top['champion_b']} 贡献 {points(t['champion_b'])} 分",
+        f"组合加成：{top['champion_a']} + {top['champion_b']} {points(t['synergy'])} 分（全服 {top['pair_games']} 局样本）",
     ]
     if best["tier_gap"] == 0:
         out.append("段位差：两人同段位")
     elif not best["rank_gap_fitted"]:
         out.append(f"段位差：相差 {best['tier_gap']} 个大段，修正项尚未用数据拟合，暂不计入")
     else:
-        out.append(f"段位差：相差 {best['tier_gap']} 个大段，修正 {best['rank_gap_elo']:+.0f} 分")
+        out.append(f"段位差：相差 {best['tier_gap']} 个大段，修正 {points(best['rank_gap_elo'])} 分")
     return out
 
 
