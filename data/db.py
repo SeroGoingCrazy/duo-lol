@@ -25,11 +25,23 @@ CREATE TABLE IF NOT EXISTS participants (
     PRIMARY KEY (match_id, puuid)
 );
 CREATE INDEX IF NOT EXISTS idx_part_puuid ON participants(puuid);
+CREATE INDEX IF NOT EXISTS idx_part_champ ON participants(champion_name, position);
+CREATE TABLE IF NOT EXISTS player_cache (   -- 查过的玩家 (PRD §4 缓存)
+    puuid TEXT PRIMARY KEY,
+    riot_id TEXT NOT NULL,       -- gameName#tagLine as Riot returns it
+    riot_id_key TEXT NOT NULL,   -- lower-cased, for lookups
+    tier TEXT, division TEXT, league_points INTEGER,
+    match_ids TEXT NOT NULL,     -- JSON list: this season's Solo/Duo games used for the profile
+    fetched_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_cache_riot_id ON player_cache(riot_id_key);
 """
 
 
 def connect(path):
-    conn = sqlite3.connect(path)
+    # Lookup threads write while the site reads; WAL + a busy timeout keeps them from failing.
+    conn = sqlite3.connect(path, timeout=30)
+    conn.execute("PRAGMA journal_mode=WAL")
     conn.executescript(SCHEMA)
     return conn
 

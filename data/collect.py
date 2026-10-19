@@ -10,11 +10,11 @@ RIOT_API_KEY is read from the repo-root .env (copy .env.example).
 Per-player profiles at query time use player_profile.py (up to 100 games this season).
 """
 import argparse
-import calendar
 import random
 import time
 
 import db
+import player_profile
 from riot import RiotClient
 
 TIERS = ["SILVER", "GOLD", "PLATINUM", "EMERALD", "DIAMOND"]
@@ -37,7 +37,7 @@ def run(args):
     client = RiotClient()
     conn = db.connect(args.db)
     party_checked = False
-    start_time = calendar.timegm(time.strptime(args.season_start, "%Y-%m-%d"))
+    start_time = player_profile.season_start_time(args.season_start)
     for tier in args.tiers:
         players = sample_players(client, tier, args.players_per_tier, rng)
         print(f"[{tier}] {len(players)} players sampled")
@@ -66,6 +66,6 @@ if __name__ == "__main__":
     ap.add_argument("--tiers", nargs="+", default=TIERS)
     ap.add_argument("--players-per-tier", type=int, default=200)
     ap.add_argument("--matches-per-player", type=int, default=20)
-    ap.add_argument("--season-start", default="2026-01-08", help="UTC date the current ranked season began; verify before a real run")
+    ap.add_argument("--season-start", default=player_profile.SEASON_START, help="UTC date the current ranked season began")
     ap.add_argument("--seed", type=int, default=42)
     run(ap.parse_args())
