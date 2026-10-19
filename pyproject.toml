@@ -5,12 +5,17 @@ description = "LoL duo-matching prototype: Riot data collector and win-rate mode
 readme = "docs/PRD.md"
 requires-python = ">=3.11"
 dependencies = [
+    "fastapi>=0.147.0",
     "python-dotenv>=1.0",
     "requests>=2.31",
+    "uvicorn>=0.54.0",
 ]
 
 [dependency-groups]
-dev = ["pytest>=8"]
+dev = [
+    "httpx>=0.28.1",
+    "pytest>=8",
+]
 
 [tool.uv]
 package = false

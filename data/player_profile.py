@@ -4,7 +4,6 @@ import calendar
 import time
 
 import db
-from riot import RiotClient
 
 MAX_GAMES = 100
 MIN_GAMES = 20
@@ -13,15 +12,20 @@ MIN_GAMES = 20
 def fetch_profile(conn, client, puuid, season_start="2026-01-08", on_progress=None):
     start_time = calendar.timegm(time.strptime(season_start, "%Y-%m-%d"))
     ids = client.season_match_ids(puuid, start_time, limit=MAX_GAMES)
-    for i, mid in enumerate(ids, 1):
+    store_matches(conn, client, ids, on_progress)
+    return proficiency(conn, puuid, ids)
+
+
+def store_matches(conn, client, match_ids, on_progress=None):
+    """Fetch and store the matches not cached yet; on_progress(done, total) after each."""
+    for i, mid in enumerate(match_ids, 1):
         if not db.has_match(conn, mid):
             match = client.match(mid)
             if match:
                 db.save_match(conn, match, seed_tier=None)
         if on_progress:
-            on_progress(i, len(ids))
+            on_progress(i, len(match_ids))
     conn.commit()
-    return proficiency(conn, puuid, ids)
 
 
 def proficiency(conn, puuid, match_ids):

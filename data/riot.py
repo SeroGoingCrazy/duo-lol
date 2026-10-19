@@ -3,6 +3,7 @@ import os
 import time
 from collections import deque
 from pathlib import Path
+from urllib.parse import quote
 
 import requests
 from dotenv import load_dotenv
@@ -81,6 +82,15 @@ class RiotClient:
             if len(page) < 100:
                 break
         return ids
+
+    def account_by_riot_id(self, game_name, tag_line):
+        """{"puuid", "gameName", "tagLine"} or None if the Riot ID does not exist."""
+        return self.get(f"{REGION}/riot/account/v1/accounts/by-riot-id/{quote(game_name)}/{quote(tag_line)}")
+
+    def solo_entry(self, puuid):
+        """The player's Solo/Duo league entry, or None if unranked this season."""
+        entries = self.get(f"{PLATFORM}/lol/league/v4/entries/by-puuid/{puuid}") or []
+        return next((e for e in entries if e.get("queueType") == SOLO_QUEUE), None)
 
     def match(self, match_id):
         return self.get(f"{REGION}/lol/match/v5/matches/{match_id}")

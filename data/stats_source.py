@@ -37,3 +37,23 @@ class OwnDataSource:
             (champ_a, pos_a, champ_b, pos_b),
         ).fetchone()
         return row[0], row[1]
+
+
+class CachedSource:
+    """Memoizes any StatsSource; one result page or 推荐池 scan repeats the same lookups."""
+
+    def __init__(self, inner):
+        self.inner = inner
+        self.memo = {}
+
+    def champion(self, champion, position, tier):
+        key = ("c", champion, position, tier)
+        if key not in self.memo:
+            self.memo[key] = self.inner.champion(champion, position, tier)
+        return self.memo[key]
+
+    def champion_pair(self, champ_a, pos_a, champ_b, pos_b):
+        key = ("p", champ_a, pos_a, champ_b, pos_b)
+        if key not in self.memo:
+            self.memo[key] = self.inner.champion_pair(champ_a, pos_a, champ_b, pos_b)
+        return self.memo[key]
