@@ -2,8 +2,13 @@
 import os
 import time
 from collections import deque
+from pathlib import Path
 
 import requests
+from dotenv import load_dotenv
+
+# Repo-root .env; a RIOT_API_KEY already set in the environment wins.
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 PLATFORM = "https://na1.api.riotgames.com"   # NA league / mastery endpoints
 REGION = "https://americas.api.riotgames.com"  # match-v5 for NA
@@ -38,7 +43,7 @@ class RiotClient:
     def __init__(self, api_key=None, session=None, limiter=None):
         self.api_key = api_key or os.environ.get("RIOT_API_KEY")
         if not self.api_key:
-            raise RuntimeError("Set RIOT_API_KEY (get one at https://developer.riotgames.com)")
+            raise RuntimeError("Set RIOT_API_KEY in .env (see .env.example) or the environment")
         self.session = session or requests.Session()
         self.limiter = limiter or RateLimiter()
 

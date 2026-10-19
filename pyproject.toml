@@ -1,0 +1,20 @@
+[project]
+name = "duo-lol"
+version = "0.1.0"
+description = "LoL duo-matching prototype: Riot data collector and win-rate model"
+readme = "docs/PRD.md"
+requires-python = ">=3.11"
+dependencies = [
+    "python-dotenv>=1.0",
+    "requests>=2.31",
+]
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["data"]
+pythonpath = ["data"]
