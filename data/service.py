@@ -3,14 +3,13 @@
 A cached player answers instantly; a new one costs up to ~100 match fetches, which the
 dev key's 100 req/2 min limit turns into roughly two minutes, reported through on_progress.
 """
-import calendar
 import json
 import time
 
 import player_profile
+from predict import TIER_ORDER
 
 CACHE_SECONDS = 6 * 3600      # re-fetch a player's games after this long
-SEASON_START = "2026-01-08"   # same default as collect.py; verify each season
 # Unranked players have no tier for the 全服 win-rate prior; they are scored as this tier
 # and the result says so.
 UNRANKED_TIER = "SILVER"
@@ -27,11 +26,27 @@ def parse_riot_id(riot_id):
     return name.strip(), tag.strip()
 
 
+def riot_id_key(riot_id):
+    """Case- and spacing-insensitive key, so 'Alpha #NA1' finds the cached 'alpha#na1'."""
+    try:
+        name, tag = parse_riot_id(riot_id)
+    except ValueError:
+        return riot_id.strip().lower()
+    return f"{name}#{tag}".lower()
+
+
+def normalize_tier(tier):
+    tier = (tier or "").strip().upper()
+    if tier not in TIER_ORDER:
+        raise ValueError(f"未知段位 {tier or '（空）'}")
+    return tier
+
+
 def cached_player(conn, riot_id, max_age=CACHE_SECONDS):
     row = conn.execute(
         """SELECT puuid, riot_id, tier, division, match_ids, fetched_at FROM player_cache
            WHERE riot_id_key=? ORDER BY fetched_at DESC LIMIT 1""",
-        (riot_id.strip().lower(),),
+        (riot_id_key(riot_id),),
     ).fetchone()
     if not row or time.time() - row[5] > max_age:
         return None
@@ -58,8 +73,7 @@ def lookup_player(conn, client, riot_id, on_progress=None):
     puuid = account["puuid"]
     canonical = f'{account["gameName"]}#{account["tagLine"]}'
     entry = client.solo_entry(puuid)
-    start = calendar.timegm(time.strptime(SEASON_START, "%Y-%m-%d"))
-    ids = client.season_match_ids(puuid, start, limit=player_profile.MAX_GAMES)
+    ids = player_profile.season_match_ids(client, puuid)
     player_profile.store_matches(conn, client, ids, on_progress)
     tier, division = (entry["tier"], entry["rank"]) if entry else (None, None)
     conn.execute(
@@ -67,7 +81,7 @@ def lookup_player(conn, client, riot_id, on_progress=None):
            ON CONFLICT(puuid) DO UPDATE SET riot_id=excluded.riot_id, riot_id_key=excluded.riot_id_key,
              tier=excluded.tier, division=excluded.division, match_ids=excluded.match_ids,
              fetched_at=excluded.fetched_at""",
-        (puuid, canonical, canonical.lower(), tier, division, json.dumps(ids), int(time.time())),
+        (puuid, canonical, riot_id_key(canonical), tier, division, json.dumps(ids), int(time.time())),
     )
     conn.commit()
     return build_player(conn, puuid, canonical, tier, division, json.dumps(ids))

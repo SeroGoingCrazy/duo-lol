@@ -7,11 +7,19 @@ import db
 
 MAX_GAMES = 100
 MIN_GAMES = 20
+SEASON_START = "2026-01-08"   # UTC date the current ranked season began; verify each season
 
 
-def fetch_profile(conn, client, puuid, season_start="2026-01-08", on_progress=None):
-    start_time = calendar.timegm(time.strptime(season_start, "%Y-%m-%d"))
-    ids = client.season_match_ids(puuid, start_time, limit=MAX_GAMES)
+def season_start_time(season_start=SEASON_START):
+    return calendar.timegm(time.strptime(season_start, "%Y-%m-%d"))
+
+
+def season_match_ids(client, puuid, limit=MAX_GAMES, season_start=SEASON_START):
+    return client.season_match_ids(puuid, season_start_time(season_start), limit=limit)
+
+
+def fetch_profile(conn, client, puuid, season_start=SEASON_START, on_progress=None):
+    ids = season_match_ids(client, puuid, season_start=season_start)
     store_matches(conn, client, ids, on_progress)
     return proficiency(conn, puuid, ids)
 
@@ -23,9 +31,9 @@ def store_matches(conn, client, match_ids, on_progress=None):
             match = client.match(mid)
             if match:
                 db.save_match(conn, match, seed_tier=None)
+                conn.commit()   # short write transactions so parallel lookups don't block
         if on_progress:
             on_progress(i, len(match_ids))
-    conn.commit()
 
 
 def proficiency(conn, puuid, match_ids):

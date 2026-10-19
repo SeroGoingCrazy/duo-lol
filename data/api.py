@@ -8,6 +8,7 @@ New players are fetched in a background job whose progress the site polls (PRD �
 """
 import os
 import threading
+import time
 import uuid
 from contextlib import closing
 from pathlib import Path
@@ -24,10 +25,13 @@ from stats_source import CachedSource, OwnDataSource
 DB_PATH = os.environ.get("DUO_DB", "lol_duo.sqlite")
 GAP_TABLE = predict.load_gap_table(os.environ.get("DUO_GAP_TABLE", str(Path(__file__).parent / "rank_gap.json")))
 MAX_PICKS, MAX_PICK_ROLES = 5, 2   # PRD §2.3: up to 5 自选英雄 in up to 2 positions
+JOB_KEEP_SECONDS = 600              # finished lookup jobs are forgotten after this long
 
 app = FastAPI(title="duo-lol")
 jobs = {}
 jobs_lock = threading.Lock()
+_client = None
+_client_lock = threading.Lock()
 
 
 def connect():
@@ -36,11 +40,22 @@ def connect():
 
 
 def riot_client():
-    if os.environ.get("DUO_FAKE_RIOT"):   # end-to-end tests only; see fake_riot.py
-        import fake_riot
-        return fake_riot.FakeRiotClient()
-    from riot import RiotClient
-    return RiotClient()
+    """One client for the whole process, so every lookup shares a single Riot rate limit."""
+    global _client
+    with _client_lock:
+        if _client is None:
+            if os.environ.get("DUO_FAKE_RIOT"):   # end-to-end tests only; see fake_riot.py
+                import fake_riot
+                _client = fake_riot.FakeRiotClient()
+            else:
+                from riot import RiotClient
+                _client = RiotClient()
+        return _client
+
+
+def prune_jobs(now):
+    for job_id in [j for j, job in jobs.items() if job.get("finished_at", now) < now - JOB_KEEP_SECONDS]:
+        del jobs[job_id]
 
 
 def player_summary(p):
@@ -70,9 +85,14 @@ def start_lookup(req: LookupRequest):
         service.parse_riot_id(req.riot_id)
     except ValueError as e:
         raise HTTPException(400, str(e))
-    job_id = uuid.uuid4().hex
+    key = service.riot_id_key(req.riot_id)
     with jobs_lock:
-        jobs[job_id] = {"status": "running", "done": 0, "total": 0, "riot_id": req.riot_id}
+        prune_jobs(time.time())
+        running = next((j for j, job in jobs.items() if job["key"] == key and job["status"] == "running"), None)
+        if running:   # a second tab or double submit joins the lookup already in flight
+            return {"job_id": running}
+        job_id = uuid.uuid4().hex
+        jobs[job_id] = {"status": "running", "done": 0, "total": 0, "riot_id": req.riot_id, "key": key}
 
     def progress(done, total):
         with jobs_lock:
@@ -90,7 +110,7 @@ def start_lookup(req: LookupRequest):
         finally:
             conn.close()
         with jobs_lock:
-            jobs[job_id].update(result)
+            jobs[job_id].update(result, finished_at=time.time())
 
     threading.Thread(target=run, daemon=True).start()
     return {"job_id": job_id}
@@ -123,31 +143,35 @@ class PairRequest(BaseModel):
 
 
 def scored_profile(conn, riot_id, self_report):
+    """(player, profile used for scoring, note about how it was scored or None)."""
     player = service.cached_player(conn, riot_id)
     if not player:
         raise HTTPException(409, f"{riot_id} 还没有查询过")
     if not player["profile"]["insufficient_data"]:
-        return player, player["profile"]
+        note = f"{player['riot_id']} 本赛季未定级，按 {service.UNRANKED_TIER} 估算" if player["unranked"] else None
+        return player, player["profile"], note
     if not self_report or not self_report.picks:
         raise HTTPException(422, {"insufficient_data": riot_id})
     picks = self_report.picks[:MAX_PICKS]
     if len({p.position for p in picks}) > MAX_PICK_ROLES:
         raise HTTPException(400, "自选英雄最多覆盖 2 个位置")
-    tier = player["tier"] or self_report.tier
-    return player, predict.self_reported_profile(tier, [(p.champion, p.position) for p in picks])
+    try:
+        tier = player["tier"] or service.normalize_tier(self_report.tier)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    note = f"{player['riot_id']} 数据不足，按自选英雄在 {tier} 的全服胜率估算"
+    return player, predict.self_reported_profile(tier, [(p.champion, p.position) for p in picks]), note
 
 
 @app.post("/api/pair")
 def pair(req: PairRequest):
     with connect() as conn:
-        pa, prof_a = scored_profile(conn, req.a, req.a_self_report)
-        pb, prof_b = scored_profile(conn, req.b, req.b_self_report)
+        pa, prof_a, note_a = scored_profile(conn, req.a, req.a_self_report)
+        pb, prof_b, note_b = scored_profile(conn, req.b, req.b_self_report)
         out = predict.predict_pair(CachedSource(OwnDataSource(conn)), prof_a, prof_b, GAP_TABLE)
     if not out:
         raise HTTPException(422, "两人没有可分配的位置组合")
-    notes = [f"{p['riot_id']} 本赛季未定级，按 {service.UNRANKED_TIER} 估算" for p in (pa, pb) if p["unranked"]]
-    notes += [f"{p['riot_id']} 数据不足，按自选英雄的全服胜率估算"
-              for p, prof in ((pa, prof_a), (pb, prof_b)) if prof["games"] == 0]
+    notes = [n for n in (note_a, note_b) if n]
     return {"a": player_summary(pa), "b": player_summary(pb), **out, "notes": notes}
 
 

@@ -39,7 +39,9 @@ CREATE INDEX IF NOT EXISTS idx_cache_riot_id ON player_cache(riot_id_key);
 
 
 def connect(path):
-    conn = sqlite3.connect(path)
+    # Lookup threads write while the site reads; WAL + a busy timeout keeps them from failing.
+    conn = sqlite3.connect(path, timeout=30)
+    conn.execute("PRAGMA journal_mode=WAL")
     conn.executescript(SCHEMA)
     return conn
 

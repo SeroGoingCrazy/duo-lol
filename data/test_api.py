@@ -53,6 +53,22 @@ def test_lookup_then_cached(client):
     assert cached.json()["games"] == 40
 
 
+def test_cache_key_ignores_case_and_spacing(client):
+    lookup(client, "Alpha#NA1")
+    assert client.get("/api/players/ALPHA%20%23%20na1").status_code == 200
+
+
+def test_duplicate_lookup_joins_running_job(client):
+    fake_riot.FETCH_DELAY = 0.01
+    try:
+        first = client.post("/api/lookups", json={"riot_id": "Delta#NA1"}).json()["job_id"]
+        second = client.post("/api/lookups", json={"riot_id": "delta #NA1"}).json()["job_id"]
+        assert first == second
+    finally:
+        fake_riot.FETCH_DELAY = 0
+    lookup(client, "Delta#NA1")
+
+
 def test_unknown_player_and_bad_id(client):
     assert lookup(client, "Nobody#NA1")["status"] == "error"
     assert client.post("/api/lookups", json={"riot_id": "no-tag"}).status_code == 400
@@ -80,6 +96,9 @@ def test_insufficient_data_falls_back_to_self_report(client):
                                        "a_self_report": {"picks": picks}})
     assert r.status_code == 200
     assert any("自选英雄" in n for n in r.json()["notes"])
+    r = client.post("/api/pair", json={"a": "Newbie#NA1", "b": "Alpha#NA1",
+                                       "a_self_report": {"tier": "gold", "picks": picks}})
+    assert r.status_code == 200   # the fake Newbie is ranked, so its own tier wins
     too_many_roles = picks + [{"champion": "Jinx", "position": "BOTTOM"}]
     r = client.post("/api/pair", json={"a": "Newbie#NA1", "b": "Alpha#NA1",
                                        "a_self_report": {"picks": too_many_roles}})
@@ -109,6 +128,12 @@ def test_can_duo_rule():
 def test_opt_in_pool_is_empty_until_players_opt_in(client):
     with db.connect(DB) as conn:
         assert recommend.candidate_pool(conn, require_opt_in=True) == []
+
+
+def test_normalize_tier():
+    assert service.normalize_tier(" gold ") == "GOLD"
+    with pytest.raises(ValueError):
+        service.normalize_tier("UNRANKED")
 
 
 def test_parse_riot_id():

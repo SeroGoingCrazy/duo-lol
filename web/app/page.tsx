@@ -19,18 +19,21 @@ export default function PairPage() {
   const [picks, setPicks] = useState<{ a?: Pick[]; b?: Pick[] }>({});
   const [champions, setChampions] = useState<string[]>([]);
 
-  useEffect(() => { listChampions().then(setChampions).catch(() => {}); }, []);
+  // Without the list the picker still accepts typed names; the API scores unknown ones at 50%.
+  useEffect(() => { listChampions().then(setChampions).catch(() => setChampions([])); }, []);
 
   // Once both players are loaded, predict as soon as everyone 数据不足 has 自选英雄.
   useEffect(() => {
     if (!players) return;
     const [pa, pb] = players;
     if ((pa.insufficient_data && !picks.a) || (pb.insufficient_data && !picks.b)) return;
+    let stale = false;   // a newer submit replaces players; ignore this answer then
     setBusy(true);
     predictPair(pa.riot_id, pb.riot_id, picks.a, picks.b)
-      .then(setResult)
-      .catch((e) => setError(e instanceof ApiError ? e.message : String(e)))
-      .finally(() => setBusy(false));
+      .then((r) => { if (!stale) setResult(r); })
+      .catch((e) => { if (!stale) setError(e instanceof ApiError ? e.message : String(e)); })
+      .finally(() => { if (!stale) setBusy(false); });
+    return () => { stale = true; };
   }, [players, picks]);
 
   async function submit(e: React.FormEvent) {

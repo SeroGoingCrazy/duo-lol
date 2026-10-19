@@ -26,16 +26,20 @@ def can_duo(tier_a, tier_b):
 def candidate_pool(conn, require_opt_in=False):
     """[(puuid, riot_id, tier, match_ids)] for ranked players with a known Riot ID."""
     pool = {}
-    opt = "AND recommend_opt_in = 1" if require_opt_in else ""
-    for puuid, riot_id, tier in conn.execute(
-        f"SELECT puuid, riot_id, tier FROM players WHERE tier IS NOT NULL AND riot_id IS NOT NULL {opt}"
-    ):
-        ids = [r[0] for r in conn.execute(
-            """SELECT p.match_id FROM participants p JOIN matches m ON m.match_id = p.match_id
-               WHERE p.puuid=? ORDER BY m.game_creation DESC LIMIT ?""",
-            (puuid, player_profile.MAX_GAMES),
-        )]
-        pool[puuid] = (puuid, riot_id, tier, ids)
+    opt = "AND pl.recommend_opt_in = 1" if require_opt_in else ""
+    rows = conn.execute(
+        f"""SELECT puuid, riot_id, tier, match_id FROM (
+              SELECT pl.puuid, pl.riot_id, pl.tier, p.match_id,
+                     ROW_NUMBER() OVER (PARTITION BY pl.puuid ORDER BY m.game_creation DESC) AS n
+              FROM players pl
+              JOIN participants p ON p.puuid = pl.puuid
+              JOIN matches m ON m.match_id = p.match_id
+              WHERE pl.tier IS NOT NULL AND pl.riot_id IS NOT NULL {opt})
+            WHERE n <= ?""",
+        (player_profile.MAX_GAMES,),
+    )
+    for puuid, riot_id, tier, match_id in rows:
+        pool.setdefault(puuid, (puuid, riot_id, tier, []))[3].append(match_id)
     if not require_opt_in:
         for puuid, riot_id, tier, ids in conn.execute(
             "SELECT puuid, riot_id, tier, match_ids FROM player_cache WHERE tier IS NOT NULL"

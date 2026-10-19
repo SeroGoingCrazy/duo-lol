@@ -17,7 +17,9 @@ export default function SelfReportForm({
 }) {
   const [picks, setPicks] = useState<Pick[]>([{ champion: "", position: "MIDDLE" }]);
   const roles = new Set(picks.map((p) => p.position));
-  const valid = picks.every((p) => champions.includes(p.champion)) && roles.size <= MAX_ROLES;
+  // Match the list when we have one; if it failed to load, accept any typed name.
+  const known = (c: string) => c.trim() !== "" && (champions.length === 0 || champions.includes(c));
+  const valid = picks.every((p) => known(p.champion)) && roles.size <= MAX_ROLES;
 
   const update = (i: number, patch: Partial<Pick>) =>
     setPicks(picks.map((p, j) => (j === i ? { ...p, ...patch } : p)));

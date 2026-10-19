@@ -1,5 +1,6 @@
 """Minimal Riot API client with dev-key rate limiting (20 req/1s, 100 req/120s)."""
 import os
+import threading
 import time
 from collections import deque
 from pathlib import Path
@@ -22,22 +23,30 @@ class RateLimiter:
     def __init__(self, limits=((20, 1.0), (100, 120.0))):
         self.limits = limits
         self.calls = deque()
+        self.lock = threading.Lock()   # one limiter is shared by every lookup thread
 
     def wait(self):
         while True:
-            now = time.monotonic()
-            longest = max(w for _, w in self.limits)
-            while self.calls and now - self.calls[0] > longest:
-                self.calls.popleft()
-            sleep_for = 0.0
-            for count, window in self.limits:
-                recent = [t for t in self.calls if now - t <= window]
-                if len(recent) >= count:
-                    sleep_for = max(sleep_for, window - (now - recent[0]) + 0.05)
+            with self.lock:
+                sleep_for = self._reserve()
             if sleep_for <= 0:
-                self.calls.append(now)
                 return
             time.sleep(sleep_for)
+
+    def _reserve(self):
+        """Record a call and return 0 if every window has room, else how long to wait."""
+        now = time.monotonic()
+        longest = max(w for _, w in self.limits)
+        while self.calls and now - self.calls[0] > longest:
+            self.calls.popleft()
+        sleep_for = 0.0
+        for count, window in self.limits:
+            recent = [t for t in self.calls if now - t <= window]
+            if len(recent) >= count:
+                sleep_for = max(sleep_for, window - (now - recent[0]) + 0.05)
+        if sleep_for <= 0:
+            self.calls.append(now)
+        return sleep_for
 
 
 class RiotClient:
