@@ -5,6 +5,7 @@
 - 需求：`docs/PRD.md`；术语：`CONTEXT.md`（写代码和注释时用里面的词）；决策：`docs/adr/`
 - 技术栈：Python（`data/`，抓取与统计）+ Next.js（`web/`，网站）
 - Python 用 uv 管理：`uv sync` 装依赖，`uv run ...` 运行，加依赖用 `uv add`，不要用 pip。Key 放在根目录 `.env`（照 `.env.example` 复制）。
+- Commit message 用 Conventional Commits 前缀：`feat:` 新功能、`fix:` 修 bug、`docs:` 文档、`chore:` 配置和杂项，例如 `feat: add champion-pair synergy`。
 
 ## 红线
 
