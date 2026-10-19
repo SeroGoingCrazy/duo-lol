@@ -108,7 +108,7 @@ def test_insufficient_data_falls_back_to_self_report(client):
 def test_recommendations_top5_duo_eligible(client):
     lookup(client, "Alpha#NA1")
     out = client.get("/api/recommendations/Alpha%23NA1").json()
-    me = (out["me"]["tier"], out["me"]["division"], 0)
+    me = (out["me"]["tier"], out["me"]["division"], out["me"]["league_points"])
     with db.connect(DB) as conn:
         ranks = {riot_id: rank for _, riot_id, rank, _ in recommend.candidate_pool(conn)}
     assert 0 < len(out["partners"]) <= 5
@@ -133,7 +133,8 @@ def test_recommendations_top5_duo_eligible(client):
     (("EMERALD", "II", 0), ("DIAMOND", "II", 0), False),    # Emerald's range stops at Diamond III
     (("DIAMOND", "IV", 0), ("DIAMOND", "II", 0), True),
     (("DIAMOND", "II", 0), ("DIAMOND", "I", 0), False),     # Diamond II's range stops at Diamond II
-    (("DIAMOND", "I", 0), ("DIAMOND", "III", 0), False),    # Diamond III's range stops at Diamond II
+    (("DIAMOND", "I", 0), ("DIAMOND", "III", 0), False),    # Diamond III's row stops at Diamond II
+    (("DIAMOND", "I", 0), ("MASTER", "I", None), False),    # unknown LP never qualifies
     (("DIAMOND", "I", 0), ("MASTER", "I", 150), True),
     (("DIAMOND", "I", 0), ("MASTER", "I", 250), False),
     (("DIAMOND", "II", 0), ("MASTER", "I", 50), False),

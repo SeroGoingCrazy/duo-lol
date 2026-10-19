@@ -6,6 +6,7 @@ export type Player = {
   riot_id: string;
   tier: string | null;
   division: string | null;
+  league_points: number | null;
   unranked: boolean;
   games: number;
   insufficient_data: boolean;

@@ -45,13 +45,15 @@ def _allows(a, b):
         return False
     b_step = rank_step(b[0], b[1])
     if tier == "MASTER":
+        if lp is None:   # Master rules depend on LP; unknown LP never qualifies
+            return False
         if b[0] == "MASTER":
-            return abs((lp or 0) - (b[2] or 0)) <= MASTER_LP_WINDOW
-        return (lp or 0) < MASTER_DUO_LP_CAP and b_step == rank_step("DIAMOND", "I")
+            return b[2] is not None and abs(lp - b[2]) <= MASTER_LP_WINDOW
+        return lp < MASTER_DUO_LP_CAP and b_step == rank_step("DIAMOND", "I")
     if tier == "DIAMOND":
         if div == "I":
             if b[0] == "MASTER":
-                return (b[2] or 0) < MASTER_DUO_LP_CAP
+                return b[2] is not None and b[2] < MASTER_DUO_LP_CAP
             low, high = DIAMOND_I_RANGE
         else:
             low, high = DIAMOND_LOW_RANGE
@@ -61,8 +63,9 @@ def _allows(a, b):
 
 
 def can_duo(a, b):
-    """Both players' ranks must allow each other, e.g. Emerald IV may list Diamond III,
-    but Diamond III only accepts Emerald II and up."""
+    """Both players' rows must allow each other. Riot's rows are not symmetric (Emerald lists
+    Diamond III, but Diamond III's row starts at Emerald II; Diamond I lists Diamond III-II, but
+    their row stops at Diamond II), so we only recommend pairs that neither row forbids."""
     return _allows(a, b) and _allows(b, a)
 
 

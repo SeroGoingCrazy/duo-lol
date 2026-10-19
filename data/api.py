@@ -60,7 +60,8 @@ def prune_jobs(now):
 
 def player_summary(p):
     prof = p["profile"]
-    return {"riot_id": p["riot_id"], "tier": p["tier"], "division": p["division"], "unranked": p["unranked"],
+    return {"riot_id": p["riot_id"], "tier": p["tier"], "division": p["division"],
+            "league_points": p["league_points"], "unranked": p["unranked"],
             "games": prof["games"], "insufficient_data": prof["insufficient_data"],
             "champions": prof["champions"][:10]}
 
