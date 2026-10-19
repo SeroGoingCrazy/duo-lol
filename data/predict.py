@@ -7,6 +7,7 @@ Every term becomes one reason on the result page:
 
 Profiles are the dicts player_profile.proficiency() returns, plus "tier".
 """
+import json
 from itertools import product
 
 from elo import elo_to_winrate, shrink, winrate_to_elo
@@ -50,6 +51,15 @@ def rank_gap(tier_a, tier_b, gap_table):
     """段位差 as Elo, looked up by tier distance. gap_table comes from training data; {} = not fitted yet."""
     gap = abs(TIER_ORDER.index(tier_a) - TIER_ORDER.index(tier_b))
     return gap, gap_table.get(gap, 0.0)
+
+
+def load_gap_table(path):
+    """段位差 table written by evaluate.py --out; a missing file means not fitted yet."""
+    try:
+        with open(path) as f:
+            return {int(k): v for k, v in json.load(f).items()}
+    except FileNotFoundError:
+        return {}
 
 
 def top_roles(profile):
