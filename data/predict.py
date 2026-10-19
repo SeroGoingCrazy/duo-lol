@@ -13,10 +13,13 @@ from itertools import product
 from elo import elo_to_winrate, shrink, winrate_to_elo
 
 # A player's own games on a champion count against this many games at the champion's 全服 win rate.
-PLAYER_PRIOR_GAMES = 20
 # Champion and 英雄组合 global samples count against this many games at 50% / at the expected value.
-CHAMPION_PRIOR_GAMES = 200
-SYNERGY_PRIOR_GAMES = 200
+# Picked from evaluate.py on the first real crawl (18,747 NA Solo/Duo games, 2026-10-19): at 20/200/200
+# the model scored worse than a coin flip (log loss 0.6944 vs 0.6931) because a player's record on a
+# champion and pair results were mostly noise; at 1000 each it is 0.6928. Re-check when data grows.
+PLAYER_PRIOR_GAMES = 1000
+CHAMPION_PRIOR_GAMES = 1000
+SYNERGY_PRIOR_GAMES = 1000
 
 ROLES_PER_PLAYER = 2      # PRD §3: each player's 2 most-played positions
 CHAMPS_PER_ROLE = 3       # PRD §3: 3 most-played champions in the assigned position
