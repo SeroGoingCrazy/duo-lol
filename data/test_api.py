@@ -108,21 +108,43 @@ def test_insufficient_data_falls_back_to_self_report(client):
 def test_recommendations_top5_duo_eligible(client):
     lookup(client, "Alpha#NA1")
     out = client.get("/api/recommendations/Alpha%23NA1").json()
-    me_tier = out["me"]["tier"]
+    me = (out["me"]["tier"], out["me"]["division"], 0)
+    with db.connect(DB) as conn:
+        ranks = {riot_id: rank for _, riot_id, rank, _ in recommend.candidate_pool(conn)}
     assert 0 < len(out["partners"]) <= 5
     rates = [p["win_rate"] for p in out["partners"]]
     assert rates == sorted(rates, reverse=True)
     for p in out["partners"]:
-        assert recommend.can_duo(me_tier, p["tier"])
+        assert recommend.can_duo(me, ranks[p["riot_id"]])
         assert p["riot_id"] != out["me"]["riot_id"]
         assert set(p) == {"riot_id", "tier", "win_rate", "win_rate_delta", "roles", "reasons"}
 
 
-def test_can_duo_rule():
-    assert recommend.can_duo("GOLD", "PLATINUM")
-    assert not recommend.can_duo("SILVER", "PLATINUM")
-    assert not recommend.can_duo("DIAMOND", "MASTER")
-    assert recommend.can_duo("MASTER", "GRANDMASTER")
+@pytest.mark.parametrize("a, b, ok", [
+    (("IRON", "IV", 0), ("SILVER", "I", 0), True),
+    (("BRONZE", "I", 0), ("GOLD", "IV", 0), False),
+    (("SILVER", "II", 0), ("GOLD", "I", 0), True),
+    (("SILVER", "I", 0), ("PLATINUM", "IV", 0), False),
+    (("GOLD", "IV", 0), ("PLATINUM", "I", 0), True),
+    (("PLATINUM", "IV", 0), ("EMERALD", "I", 0), True),
+    (("EMERALD", "I", 0), ("DIAMOND", "III", 0), True),
+    (("EMERALD", "IV", 0), ("DIAMOND", "III", 0), False),   # Diamond III only takes Emerald II+
+    (("EMERALD", "II", 0), ("DIAMOND", "III", 0), True),
+    (("EMERALD", "II", 0), ("DIAMOND", "II", 0), False),    # Emerald's range stops at Diamond III
+    (("DIAMOND", "IV", 0), ("DIAMOND", "II", 0), True),
+    (("DIAMOND", "II", 0), ("DIAMOND", "I", 0), False),     # Diamond II's range stops at Diamond II
+    (("DIAMOND", "I", 0), ("DIAMOND", "III", 0), False),    # Diamond III's range stops at Diamond II
+    (("DIAMOND", "I", 0), ("MASTER", "I", 150), True),
+    (("DIAMOND", "I", 0), ("MASTER", "I", 250), False),
+    (("DIAMOND", "II", 0), ("MASTER", "I", 50), False),
+    (("MASTER", "I", 100), ("MASTER", "I", 450), True),
+    (("MASTER", "I", 100), ("MASTER", "I", 600), False),
+    (("GRANDMASTER", "I", 600), ("MASTER", "I", 500), False),
+    (("CHALLENGER", "I", 1200), ("CHALLENGER", "I", 1100), False),
+])
+def test_can_duo_follows_riot_table(a, b, ok):
+    assert recommend.can_duo(a, b) is ok
+    assert recommend.can_duo(b, a) is ok
 
 
 def test_opt_in_pool_is_empty_until_players_opt_in(client):

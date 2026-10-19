@@ -30,7 +30,7 @@ CREATE TABLE IF NOT EXISTS player_cache (   -- 查过的玩家 (PRD §4 缓存)
     puuid TEXT PRIMARY KEY,
     riot_id TEXT NOT NULL,       -- gameName#tagLine as Riot returns it
     riot_id_key TEXT NOT NULL,   -- lower-cased, for lookups
-    tier TEXT, division TEXT,
+    tier TEXT, division TEXT, league_points INTEGER,
     match_ids TEXT NOT NULL,     -- JSON list: this season's Solo/Duo games used for the profile
     fetched_at INTEGER NOT NULL
 );

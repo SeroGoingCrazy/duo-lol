@@ -44,21 +44,21 @@ def normalize_tier(tier):
 
 def cached_player(conn, riot_id, max_age=CACHE_SECONDS):
     row = conn.execute(
-        """SELECT puuid, riot_id, tier, division, match_ids, fetched_at FROM player_cache
+        """SELECT puuid, riot_id, tier, division, league_points, match_ids, fetched_at FROM player_cache
            WHERE riot_id_key=? ORDER BY fetched_at DESC LIMIT 1""",
         (riot_id_key(riot_id),),
     ).fetchone()
-    if not row or time.time() - row[5] > max_age:
+    if not row or time.time() - row[6] > max_age:
         return None
-    return build_player(conn, *row[:5])
+    return build_player(conn, *row[:6])
 
 
-def build_player(conn, puuid, riot_id, tier, division, match_ids_json):
+def build_player(conn, puuid, riot_id, tier, division, league_points, match_ids_json):
     match_ids = json.loads(match_ids_json)
     profile = player_profile.proficiency(conn, puuid, match_ids)
     profile["tier"] = tier or UNRANKED_TIER
     return {"puuid": puuid, "riot_id": riot_id, "tier": tier, "division": division,
-            "unranked": tier is None, "profile": profile}
+            "league_points": league_points, "unranked": tier is None, "profile": profile}
 
 
 def lookup_player(conn, client, riot_id, on_progress=None):
@@ -75,13 +75,15 @@ def lookup_player(conn, client, riot_id, on_progress=None):
     entry = client.solo_entry(puuid)
     ids = player_profile.season_match_ids(client, puuid)
     player_profile.store_matches(conn, client, ids, on_progress)
-    tier, division = (entry["tier"], entry["rank"]) if entry else (None, None)
+    tier, division, lp = (entry["tier"], entry["rank"], entry["leaguePoints"]) if entry else (None, None, None)
     conn.execute(
-        """INSERT INTO player_cache VALUES (?,?,?,?,?,?,?)
+        """INSERT INTO player_cache
+             (puuid, riot_id, riot_id_key, tier, division, league_points, match_ids, fetched_at)
+           VALUES (?,?,?,?,?,?,?,?)
            ON CONFLICT(puuid) DO UPDATE SET riot_id=excluded.riot_id, riot_id_key=excluded.riot_id_key,
-             tier=excluded.tier, division=excluded.division, match_ids=excluded.match_ids,
-             fetched_at=excluded.fetched_at""",
-        (puuid, canonical, riot_id_key(canonical), tier, division, json.dumps(ids), int(time.time())),
+             tier=excluded.tier, division=excluded.division, league_points=excluded.league_points,
+             match_ids=excluded.match_ids, fetched_at=excluded.fetched_at""",
+        (puuid, canonical, riot_id_key(canonical), tier, division, lp, json.dumps(ids), int(time.time())),
     )
     conn.commit()
-    return build_player(conn, puuid, canonical, tier, division, json.dumps(ids))
+    return build_player(conn, puuid, canonical, tier, division, lp, json.dumps(ids))
