@@ -99,7 +99,8 @@ def evaluate_assignment(source, a, b, role_a, role_b, gap_table):
         })
     combos.sort(key=lambda c: c["win_rate"], reverse=True)
     return {"role_a": role_a, "role_b": role_b, "win_rate": elo_to_winrate(weighted_elo),
-            "combos": combos, "tier_gap": gap, "rank_gap_elo": gap_elo}
+            "combos": combos, "tier_gap": gap, "rank_gap_elo": gap_elo,
+            "rank_gap_fitted": bool(gap_table)}
 
 
 def predict_pair(source, a, b, gap_table=None):
@@ -134,6 +135,8 @@ def reasons(best, n_options):
     ]
     if best["tier_gap"] == 0:
         out.append("段位差：两人同段位")
+    elif not best["rank_gap_fitted"]:
+        out.append(f"段位差：相差 {best['tier_gap']} 个大段，修正项尚未用数据拟合，暂不计入")
     else:
         out.append(f"段位差：相差 {best['tier_gap']} 个大段，修正 {best['rank_gap_elo']:+.0f} 分")
     return out

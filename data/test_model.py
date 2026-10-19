@@ -68,7 +68,10 @@ def test_rank_gap_table_applies():
     b = profile("DIAMOND", [("LeeSin", "JUNGLE", 30, 15)])
     out = predict.predict_pair(FakeSource(), a, b, gap_table={4: -30.0})
     assert out["win_rate"] < 0.5
-    assert any("相差 4 个大段" in r for r in out["reasons"])
+    assert any("相差 4 个大段，修正 -30 分" in r for r in out["reasons"])
+    unfitted = predict.predict_pair(FakeSource(), a, b)
+    assert abs(unfitted["win_rate"] - 0.5) < 1e-9
+    assert any("尚未用数据拟合" in r for r in unfitted["reasons"])
 
 
 def test_self_reported_profile_uses_global_rates():
