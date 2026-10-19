@@ -97,3 +97,9 @@ if __name__ == "__main__":
         if name.startswith("test_"):
             fn()
     print("all passed")
+
+
+def test_points_never_negative_zero():
+    assert predict.points(-0.3) == "+0"
+    assert predict.points(44.5) == "+44" or predict.points(44.5) == "+45"
+    assert predict.points(-30) == "-30"

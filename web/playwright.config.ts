@@ -1,0 +1,32 @@
+import { defineConfig } from "@playwright/test";
+import { existsSync } from "node:fs";
+
+// End-to-end run against a synthetic database and the fake Riot client (data/fake_riot.py):
+// no Riot key or network needed. Covers PRD §5 acceptance criteria 2 and 3.
+const DB = "/tmp/duo-lol-e2e.sqlite";
+const chromium = "/opt/pw-browsers/chromium";
+
+export default defineConfig({
+  testDir: "./e2e",
+  timeout: 60_000,
+  use: {
+    baseURL: "http://127.0.0.1:3100",
+    launchOptions: existsSync(chromium) ? { executablePath: chromium } : {},
+  },
+  webServer: [
+    {
+      command: `rm -f ${DB} && uv run python data/fake_riot.py ${DB} && DUO_DB=${DB} DUO_FAKE_RIOT=1 uv run uvicorn api:app --app-dir data --port 8100`,
+      cwd: "..",
+      url: "http://127.0.0.1:8100/api/champions",
+      timeout: 120_000,
+      reuseExistingServer: false,
+    },
+    {
+      command: "npm run build && npx next start -p 3100",
+      env: { DUO_API_URL: "http://127.0.0.1:8100" },
+      url: "http://127.0.0.1:3100",
+      timeout: 180_000,
+      reuseExistingServer: false,
+    },
+  ],
+});
