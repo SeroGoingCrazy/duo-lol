@@ -11,3 +11,5 @@ test-results/
 playwright-report/
 *.tsbuildinfo
 data/score_scale.json
+.env.local
+web/.data/

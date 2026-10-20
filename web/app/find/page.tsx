@@ -4,7 +4,6 @@ import { Heart, RotateCcw, X } from "lucide-react";
 import CopyButton from "@/components/CopyButton";
 import DeckSidebar from "@/components/DeckSidebar";
 import LookupProgress from "@/components/LookupProgress";
-import Nav from "@/components/Nav";
 import RiotIdField from "@/components/RiotIdField";
 import SelfReportForm from "@/components/SelfReportForm";
 import SwipeCard from "@/components/SwipeCard";
@@ -121,7 +120,6 @@ export default function FindPage() {
 
   return (
     <>
-      <Nav current="find" />
       <h1 className="mb-1 text-2xl font-bold tracking-tight lg:text-3xl">找搭子</h1>
       <p className="mb-5 text-sm text-muted-foreground">
         推荐池里能和你一起排的玩家，按搭配评分从高到低一张张发给你。右滑喜欢、左滑跳过，双方都喜欢就互选，互选后才能看到对方的 Riot ID。
