@@ -1,8 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
 
-// Data Dragon is not reachable from CI; serve a two-language stub so Chinese names can be checked.
+// Data Dragon is not reachable from CI; without public/champions/names.json the site asks it for
+// names, so serve a two-language stub there and check the Chinese names.
 async function stubDataDragon(page: Page) {
-  await page.route("https://ddragon.leagueoflegends.com/api/versions.json", (r) => r.fulfill({ json: ["15.20.1"] }));
+  await page.route("**/champions/names.json", (r) => r.fulfill({ status: 404 }));
   await page.route("https://ddragon.leagueoflegends.com/cdn/*/data/*/champion.json", (r) => {
     const zh = r.request().url().includes("zh_CN");
     const champs: Record<string, [string, string, string]> = {
@@ -12,7 +13,6 @@ async function stubDataDragon(page: Page) {
       [id, zh ? { id, name, title } : { id, name: en, title: "" }]));
     return r.fulfill({ json: { data } });
   });
-  await page.route("https://ddragon.leagueoflegends.com/cdn/*/img/**", (r) => r.abort());
 }
 
 async function pickChampion(page: Page, row: number, search: string, name: string) {
