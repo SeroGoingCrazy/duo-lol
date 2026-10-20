@@ -5,6 +5,7 @@ import { existsSync } from "node:fs";
 // no Riot key or network needed. Covers PRD §5 acceptance criteria 2 and 3.
 const DB = "/tmp/duo-lol-e2e.sqlite";
 const SCALE = "/tmp/duo-lol-e2e-scale.json";
+const APP_DB = "/tmp/duo-lol-e2e-app";   // PGlite directory for the app schema (lib/db)
 const chromium = "/opt/pw-browsers/chromium";
 
 export default defineConfig({
@@ -24,8 +25,8 @@ export default defineConfig({
       reuseExistingServer: false,
     },
     {
-      command: "npm run build && npx next start -p 3100",
-      env: { DUO_API_URL: "http://127.0.0.1:8100", DUO_NEXT_DIST_DIR: ".next-e2e" },
+      command: `rm -rf ${APP_DB} && npm run build && npx next start -p 3100`,
+      env: { DUO_API_URL: "http://127.0.0.1:8100", DUO_NEXT_DIST_DIR: ".next-e2e", APP_DB_DIR: APP_DB, AUTH_SECRET: "e2e-only-secret", AUTH_DEV_LOGIN: "1" },
       url: "http://127.0.0.1:3100",
       timeout: 180_000,
       reuseExistingServer: false,

@@ -1,19 +1,35 @@
+"use client";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { signOutNow } from "@/app/authActions";
 import { cn } from "@/lib/utils";
 
-export default function Nav({ current }: { current: "pair" | "find" }) {
-  const item = (href: string, key: "pair" | "find", label: string) => (
-    <Link href={href} aria-current={current === key ? "page" : undefined}
+export default function Nav({ member }: { member: { name: string } | null }) {
+  const path = usePathname();
+  const item = (href: string, label: string) => (
+    <Link href={href} aria-current={path === href ? "page" : undefined}
       className={cn("rounded-md px-3 py-1.5 text-sm no-underline transition-colors",
-        current === key ? "bg-accent font-semibold text-foreground" : "text-muted-foreground hover:text-foreground")}>
+        path === href ? "bg-accent font-semibold text-foreground" : "text-muted-foreground hover:text-foreground")}>
       {label}
     </Link>
   );
   return (
-    <nav className="mb-6 flex items-center gap-1">
+    <nav className="mb-6 flex flex-wrap items-center gap-1">
       <span className="mr-3 font-bold tracking-tight">匹配搭子</span>
-      {item("/", "pair", "查组合")}
-      {item("/find", "find", "找搭子")}
+      {item("/", "查组合")}
+      {item("/find", "找搭子")}
+      <div className="ml-auto flex items-center gap-1">
+        {member ? (
+          <>
+            {item("/account", member.name || "我的账号")}
+            <form action={signOutNow}>
+              <button className="cursor-pointer rounded-md px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground">退出</button>
+            </form>
+          </>
+        ) : (
+          item("/login", "登录")
+        )}
+      </div>
     </nav>
   );
 }

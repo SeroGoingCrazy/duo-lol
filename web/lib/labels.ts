@@ -14,6 +14,8 @@ export const SELF_REPORT_TIERS = ["IRON", "BRONZE", "SILVER", "GOLD", "PLATINUM"
 
 const APEX = new Set(["MASTER", "GRANDMASTER", "CHALLENGER"]);
 
+export const POSITIONS = Object.keys(POSITION_LABELS);
+
 export const positionLabel = (p: string) => POSITION_LABELS[p] ?? p;
 
 export function tierLabel(tier: string | null, division?: string | null, lp?: number | null) {

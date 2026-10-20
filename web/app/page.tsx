@@ -1,6 +1,5 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import Nav from "@/components/Nav";
 import LookupProgress from "@/components/LookupProgress";
 import PairResultView from "@/components/PairResultView";
 import RiotIdField from "@/components/RiotIdField";
@@ -81,7 +80,6 @@ export default function PairPage() {
 
   return (
     <>
-      <Nav current="pair" />
       <h1 className="mb-1 text-2xl font-bold tracking-tight lg:text-3xl">查组合</h1>
       <p className="mb-5 text-sm text-muted-foreground">输入两个美服 Riot ID，看你们一起打单双排的搭配评分和最佳英雄组合。</p>
 

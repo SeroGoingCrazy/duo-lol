@@ -4,7 +4,6 @@ import { ArrowLeft, ArrowRight, Heart, RotateCcw, Sparkles, X } from "lucide-rea
 import CopyButton from "@/components/CopyButton";
 import DeckSidebar from "@/components/DeckSidebar";
 import LookupProgress from "@/components/LookupProgress";
-import Nav from "@/components/Nav";
 import RiotIdField from "@/components/RiotIdField";
 import SelfReportForm from "@/components/SelfReportForm";
 import SwipeCard from "@/components/SwipeCard";
@@ -125,7 +124,6 @@ export default function FindPage() {
 
   return (
     <>
-      <Nav current="find" />
       <div className="mx-auto max-w-6xl">
       <div className={`${partners ? "mb-3 sm:mb-6" : "mb-6"} flex flex-wrap items-end justify-between gap-4`}>
         <div>

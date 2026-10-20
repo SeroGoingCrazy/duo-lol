@@ -7,6 +7,8 @@ const API_URL = process.env.DUO_API_URL ?? "http://127.0.0.1:8000";
 
 export default function config(phase: string): NextConfig {
   return {
+    // PGlite must load its WebAssembly from its own package folder.
+    serverExternalPackages: ["@electric-sql/pglite"],
     // Builds and test servers must not overwrite a running developer's chunks.
     distDir: process.env.DUO_NEXT_DIST_DIR ?? (phase === PHASE_DEVELOPMENT_SERVER ? ".next-dev" : ".next"),
     async rewrites() {
