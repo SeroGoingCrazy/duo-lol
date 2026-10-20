@@ -11,7 +11,7 @@ test("查组合: first lookup shows progress, cached lookup is fast", async ({ p
   await expect(page.getByTestId("win-rate")).toHaveText(/\d+\.\d%/);
   await expect(page.getByTestId("win-rate-delta")).toContainText("比你们各自单排");
   await expect(page.getByTestId("roles")).toContainText("打");
-  const pairs = page.getByTestId("top-pairs").locator("tbody tr");
+  const pairs = page.getByTestId("top-pairs").locator("li");
   expect(await pairs.count()).toBeGreaterThanOrEqual(1);
   expect(await pairs.count()).toBeLessThanOrEqual(3);
   expect(await page.getByTestId("reasons").locator("li").count()).toBeGreaterThanOrEqual(3);

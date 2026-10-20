@@ -48,3 +48,15 @@ ul.reasons { margin: 8px 0 0; padding-left: 20px; }
 table { width: 100%; border-collapse: collapse; }
 td, th { text-align: left; padding: 6px 4px; border-bottom: 1px solid var(--line); }
 footer { margin-top: 40px; font-size: 13px; color: var(--muted); }
+.indeterminate { position: relative; height: 6px; margin: 10px 0 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
+.indeterminate span { position: absolute; top: 0; bottom: 0; width: 35%; border-radius: 3px; background: var(--accent); animation: indeterminate 1.3s ease-in-out infinite; }
+@keyframes indeterminate { from { left: -35%; } to { left: 100%; } }
+@media (prefers-reduced-motion: reduce) { .indeterminate span { animation-duration: 4s; } }
+.pair-legend { font-size: 13px; margin-bottom: 4px; }
+ol.champ-pairs { list-style: none; margin: 0; padding: 0; }
+ol.champ-pairs li { display: flex; align-items: center; gap: 14px; padding: 8px 4px; border-bottom: 1px solid var(--line); }
+.champ-pair { display: flex; align-items: center; gap: 6px; flex: none; }
+.champ-names { flex: 1; min-width: 0; font-size: 14px; line-height: 1.4; }
+.champ-names .muted { font-size: 13px; }
+.champ-wr { font-weight: 700; font-size: 16px; }
+.champ-icon { display: inline-flex; align-items: center; justify-content: center; border-radius: 6px; object-fit: cover; background: var(--line); color: var(--muted); font-weight: 600; }

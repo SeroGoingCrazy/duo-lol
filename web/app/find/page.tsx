@@ -7,7 +7,7 @@ import { ApiError, ensurePlayer, findPartners, pct, type Partner } from "@/lib/a
 export default function FindPage() {
   const [me, setMe] = useState("");
   const [busy, setBusy] = useState(false);
-  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+  const [loading, setLoading] = useState("");
   const [error, setError] = useState("");
   const [partners, setPartners] = useState<Partner[] | null>(null);
 
@@ -15,17 +15,18 @@ export default function FindPage() {
     e.preventDefault();
     setError(""); setPartners(null); setBusy(true);
     try {
-      const player = await ensurePlayer(me.trim(), (done, total) => setProgress({ done, total }));
-      setProgress(null);
+      setLoading(`正在读取 ${me.trim()} 本赛季的单双排对局…`);
+      const player = await ensurePlayer(me.trim());
       if (player.insufficient_data) {
         setError(`${player.riot_id} 本赛季单双排不足 20 场，暂时没法推荐搭子。`);
         return;
       }
+      setLoading("正在计算推荐搭子…");
       setPartners((await findPartners(player.riot_id)).partners);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : String(err));
     } finally {
-      setBusy(false); setProgress(null);
+      setBusy(false); setLoading("");
     }
   }
 
@@ -37,7 +38,9 @@ export default function FindPage() {
         <input aria-label="你的 Riot ID" placeholder="你的 Riot ID，如 Name#NA1" value={me} onChange={(e) => setMe(e.target.value)} required />
         <button disabled={busy || !me.includes("#")}>找搭子</button>
       </form>
-      {progress && <LookupProgress label={me} {...progress} />}
+      {loading && (
+        <LookupProgress label={loading} hint={loading.startsWith("正在读取") ? "第一次查询的玩家大约需要 2 分钟，之后会缓存。" : undefined} />
+      )}
       {error && <div className="panel error" role="alert">{error}</div>}
       {partners && partners.length === 0 && <div className="panel">推荐池里暂时没有能和你双排的玩家。</div>}
       {partners && partners.length > 0 && (
