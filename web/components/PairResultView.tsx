@@ -11,7 +11,7 @@ export default function PairResultView({ r }: { r: PairResult }) {
   const info = useChampionInfo();
   const up = r.win_rate_delta >= 0;
   return (
-    <div className="space-y-4" data-testid="pair-result">
+    <div className="grid gap-4 xl:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] xl:items-start" data-testid="pair-result">
       <Card>
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
@@ -42,7 +42,7 @@ export default function PairResultView({ r }: { r: PairResult }) {
       </Card>
 
       {r.notes.length > 0 && (
-        <ul className="space-y-1 text-xs text-muted-foreground" data-testid="notes">
+        <ul className="space-y-1 text-xs text-muted-foreground xl:col-span-2" data-testid="notes">
           {r.notes.map((x) => <li key={x}>* {x}</li>)}
         </ul>
       )}

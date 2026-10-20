@@ -9,13 +9,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { POSITIONS, type Pick, type Player, type SelfReport } from "@/lib/api";
 import { SELF_REPORT_TIERS, positionLabel, tierLabel } from "@/lib/labels";
 import { useChampionInfo } from "@/lib/useChampionInfo";
+import { cn } from "@/lib/utils";
 
 const MAX_PICKS = 5;
 const MAX_ROLES = 2;
 
 /** 数据不足 fallback (PRD §2.3): up to 5 自选英雄 in up to 2 positions; 未定级 players also pick a tier. */
-export default function SelfReportForm({ player, champions, initial, step, onSubmit }: {
-  player: Player; champions: string[]; initial?: SelfReport; step?: string; onSubmit: (r: SelfReport) => void;
+export default function SelfReportForm({ player, champions, initial, step, className, onSubmit }: {
+  player: Player; champions: string[]; initial?: SelfReport; step?: string; className?: string; onSubmit: (r: SelfReport) => void;
 }) {
   const info = useChampionInfo();
   const [picks, setPicks] = useState<Pick[]>(initial?.picks ?? [{ champion: "", position: "" }]);
@@ -38,7 +39,7 @@ export default function SelfReportForm({ player, champions, initial, step, onSub
   }
 
   return (
-    <Card data-testid="self-report" className="space-y-4">
+    <Card data-testid="self-report" className={cn("space-y-4", className)}>
       <div>
         {step && <div className="mb-1 text-xs font-medium text-primary">{step}</div>}
         <div className="font-semibold">{player.riot_id} 本赛季单双排只有 {player.games} 场</div>

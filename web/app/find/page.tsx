@@ -65,10 +65,10 @@ export default function FindPage() {
   return (
     <>
       <Nav current="find" />
-      <h1 className="mb-1 text-2xl font-bold tracking-tight">找搭子</h1>
+      <h1 className="mb-1 text-2xl font-bold tracking-tight lg:text-3xl">找搭子</h1>
       <p className="mb-5 text-sm text-muted-foreground">从推荐池里找出和你双排评分最高的 5 位玩家（只列能和你一起排的段位）。</p>
 
-      <Card className="mb-4">
+      <Card className="mb-4 max-w-3xl">
         <form className="flex flex-wrap items-start gap-3" onSubmit={(e) => { e.preventDefault(); if (ready) search(me); }}>
           <RiotIdField label="你的 Riot ID" placeholder="Name#NA1" value={me} onChange={setMe} />
           <Button className="mt-5" disabled={busy || !ready}>找搭子</Button>
@@ -78,13 +78,13 @@ export default function FindPage() {
       <div className="space-y-3">
         {loading && <LookupProgress label={loading} hint={loading.startsWith("正在读取") ? "第一次查询的玩家大约需要 2 分钟，之后会缓存。" : undefined} />}
         {error && <Alert variant="error">{error}</Alert>}
-        {player && <SelfReportForm player={player} champions={champions} onSubmit={(r) => recommend(player, r)} />}
+        {player && <SelfReportForm className="max-w-3xl" player={player} champions={champions} onSubmit={(r) => recommend(player, r)} />}
         {partners && partners.length === 0 && <Alert>推荐池里暂时没有能和你一起排的玩家。</Alert>}
         {partners && partners.length > 0 && (
           <>
             <div className="flex items-center gap-1.5 text-sm text-muted-foreground">按搭配评分从高到低 <ScoreHelp /></div>
-            <ol className="space-y-3" data-testid="partners">
-              {partners.map((p, i) => <li key={p.riot_id}><PartnerCard p={p} rank={i + 1} info={info} /></li>)}
+            <ol className="grid gap-3 xl:grid-cols-2" data-testid="partners">
+              {partners.map((p, i) => <li key={p.riot_id} className="min-w-0"><PartnerCard p={p} rank={i + 1} info={info} /></li>)}
             </ol>
             <p className="text-xs text-muted-foreground">
               网站不提供联系方式：复制对方的 Riot ID，在游戏客户端里加好友邀请双排。

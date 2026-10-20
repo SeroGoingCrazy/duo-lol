@@ -14,7 +14,7 @@ export default function PartnerCard({ p, rank, info }: { p: Partner; rank: numbe
   const best = p.top_pairs[0];
   const up = p.win_rate_delta >= 0;
   return (
-    <Card className="flex flex-wrap items-center gap-4 p-4" data-testid="partner">
+    <Card className="flex h-full flex-wrap items-center gap-4 p-4" data-testid="partner">
       <div className="w-6 text-center text-lg font-bold text-muted-foreground">{rank}</div>
       <div className="min-w-0 flex-1 space-y-2">
         <div className="flex flex-wrap items-center gap-2">
