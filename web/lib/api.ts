@@ -63,11 +63,8 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-/** Cached player, or start a lookup and poll it, reporting games fetched so far. */
-export async function ensurePlayer(
-  riotId: string,
-  onProgress: (done: number, total: number) => void,
-): Promise<Player> {
+/** Cached player, or start a lookup and poll it until done. */
+export async function ensurePlayer(riotId: string): Promise<Player> {
   try {
     return await call<Player>(`/api/players/${encodeURIComponent(riotId)}`);
   } catch (e) {
@@ -78,10 +75,7 @@ export async function ensurePlayer(
     body: JSON.stringify({ riot_id: riotId }),
   });
   for (;;) {
-    const job = await call<{ status: string; done: number; total: number; error?: string; player?: Player }>(
-      `/api/lookups/${job_id}`,
-    );
-    onProgress(job.done, job.total);
+    const job = await call<{ status: string; error?: string; player?: Player }>(`/api/lookups/${job_id}`);
     if (job.status === "done" && job.player) return job.player;
     if (job.status === "error") throw new ApiError(500, job.error ?? "查询失败");
     await sleep(700);

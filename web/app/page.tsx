@@ -6,13 +6,11 @@ import PairResultView from "@/components/PairResultView";
 import SelfReportForm from "@/components/SelfReportForm";
 import { ApiError, ensurePlayer, listChampions, predictPair, type PairResult, type Pick, type Player } from "@/lib/api";
 
-type Progress = { label: string; done: number; total: number } | null;
-
 export default function PairPage() {
   const [a, setA] = useState("");
   const [b, setB] = useState("");
   const [busy, setBusy] = useState(false);
-  const [progress, setProgress] = useState<Progress>(null);
+  const [loadingId, setLoadingId] = useState<string | null>(null);   // player being read
   const [error, setError] = useState("");
   const [result, setResult] = useState<PairResult | null>(null);
   const [players, setPlayers] = useState<[Player, Player] | null>(null);
@@ -42,7 +40,8 @@ export default function PairPage() {
     try {
       const loaded: Player[] = [];
       for (const id of [a, b]) {
-        loaded.push(await ensurePlayer(id.trim(), (done, total) => setProgress({ label: id, done, total })));
+        setLoadingId(id.trim());
+        loaded.push(await ensurePlayer(id.trim()));
       }
       setPlayers([loaded[0], loaded[1]]);
       setBusy(false);
@@ -50,7 +49,7 @@ export default function PairPage() {
       setError(err instanceof ApiError ? err.message : String(err));
       setBusy(false);
     } finally {
-      setProgress(null);
+      setLoadingId(null);
     }
   }
 
@@ -63,7 +62,10 @@ export default function PairPage() {
         <input aria-label="玩家 B" placeholder="玩家 B 的 Riot ID" value={b} onChange={(e) => setB(e.target.value)} required />
         <button disabled={busy || !a.includes("#") || !b.includes("#")}>预测</button>
       </form>
-      {progress && <LookupProgress {...progress} />}
+      {loadingId && (
+        <LookupProgress label={`正在读取 ${loadingId} 本赛季的单双排对局…`} hint="第一次查询的玩家大约需要 2 分钟，之后会缓存。" />
+      )}
+      {!loadingId && busy && <LookupProgress label="正在计算预测胜率…" />}
       {error && <div className="panel error" role="alert">{error}</div>}
       {players?.[0].insufficient_data && !picks.a && (
         <SelfReportForm riotId={players[0].riot_id} champions={champions} onSubmit={(p) => setPicks((x) => ({ ...x, a: p }))} />

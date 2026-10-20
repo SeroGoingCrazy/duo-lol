@@ -1,3 +1,4 @@
+import ChampionIcon from "@/components/ChampionIcon";
 import { pct, type PairResult } from "@/lib/api";
 
 export default function PairResultView({ r }: { r: PairResult }) {
@@ -14,16 +15,23 @@ export default function PairResultView({ r }: { r: PairResult }) {
       <div data-testid="roles">{r.a.riot_id} 打 <b>{r.roles.a}</b>，{r.b.riot_id} 打 <b>{r.roles.b}</b></div>
 
       <h3>最佳英雄组合</h3>
-      <table data-testid="top-pairs">
-        <thead><tr><th>{r.a.riot_id}</th><th>{r.b.riot_id}</th><th>预测胜率</th></tr></thead>
-        <tbody>
-          {r.top_pairs.map((p) => (
-            <tr key={`${p.champion_a}-${p.champion_b}`}>
-              <td>{p.champion_a}</td><td>{p.champion_b}</td><td>{pct(p.win_rate)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <div className="muted pair-legend">左边是 {r.a.riot_id}，右边是 {r.b.riot_id}</div>
+      <ol className="champ-pairs" data-testid="top-pairs">
+        {r.top_pairs.map((p) => (
+          <li key={`${p.champion_a}-${p.champion_b}`}>
+            <div className="champ-pair">
+              <ChampionIcon champion={p.champion_a} />
+              <span className="muted">+</span>
+              <ChampionIcon champion={p.champion_b} />
+            </div>
+            <div className="champ-names">
+              <div>{p.champion_a} + {p.champion_b}</div>
+              <div className="muted">全服 {p.pair_games.toLocaleString()} 局</div>
+            </div>
+            <div className="champ-wr">{pct(p.win_rate)}</div>
+          </li>
+        ))}
+      </ol>
 
       <h3>理由</h3>
       <ul className="reasons" data-testid="reasons">
