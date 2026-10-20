@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Heart, RotateCcw, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Heart, RotateCcw, Sparkles, X } from "lucide-react";
 import CopyButton from "@/components/CopyButton";
 import DeckSidebar from "@/components/DeckSidebar";
 import LookupProgress from "@/components/LookupProgress";
@@ -63,6 +63,7 @@ export default function FindPage() {
   }
 
   function undo() {
+    if (fling) return;
     const k = log.lastPass;
     if (!k) return;
     const swipes = { ...log.swipes };
@@ -79,9 +80,11 @@ export default function FindPage() {
   // ← 跳过, → 喜欢, as on Tinder's web app; not while typing in a field
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (!top || fling || matched || (e.target as HTMLElement).closest("input, textarea, [role=combobox]")) return;
-      if (e.key === "ArrowLeft") setFling("pass");
-      if (e.key === "ArrowRight") setFling("like");
+      if (!top || fling || matched || e.repeat || e.altKey || e.ctrlKey || e.metaKey || (e.target as HTMLElement).closest("input, textarea, button, a, [contenteditable], [role=combobox], [role=tab]")) return;
+      if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+        e.preventDefault();
+        setFling(e.key === "ArrowLeft" ? "pass" : "like");
+      }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -103,6 +106,7 @@ export default function FindPage() {
   }
 
   async function search(id: string) {
+    setFling(null);
     setError(""); setPartners(null); setPlayer(null); setNotes([]); setMatched(null); setBusy(true);
     const url = new URL(window.location.href);
     url.searchParams.set("me", id.trim());
@@ -122,17 +126,23 @@ export default function FindPage() {
   return (
     <>
       <Nav current="find" />
-      <h1 className="mb-1 text-2xl font-bold tracking-tight lg:text-3xl">找搭子</h1>
-      <p className="mb-5 text-sm text-muted-foreground">
-        推荐池里能和你一起排的玩家，按搭配评分从高到低一张张发给你。右滑喜欢、左滑跳过，双方都喜欢就互选，互选后才能看到对方的 Riot ID。
-      </p>
+      <div className="mx-auto max-w-6xl">
+      <div className={`${partners ? "mb-3 sm:mb-6" : "mb-6"} flex flex-wrap items-end justify-between gap-4`}>
+        <div>
+          <div className={`${partners ? "hidden sm:flex" : "flex"} mb-2 items-center gap-1.5 text-xs font-medium text-primary`}><Sparkles className="size-3.5" />找到合拍的下一局</div>
+          <h1 className="text-3xl font-bold tracking-tight">找搭子</h1>
+          <p className={`${partners ? "hidden sm:block" : ""} mt-2 text-sm text-muted-foreground`}>看看搭配，选个队友。右滑喜欢，左滑跳过。</p>
+        </div>
+        {partners && <span className="rounded-full border bg-card px-3 py-1.5 text-xs text-muted-foreground">美服 · 单双排 <span className="mx-1 text-border">/</span> 演示版</span>}
+      </div>
 
-      <Card className="mb-4">
-        <form className="flex flex-wrap items-start gap-3" onSubmit={(e) => { e.preventDefault(); if (ready) search(me); }}>
+      <details open={partners ? undefined : true} className="mb-3 rounded-2xl border bg-card p-4 sm:mb-6" key={partners ? "loaded" : "search"}>
+        <summary className="cursor-pointer text-sm font-medium">{partners ? <><span className="text-muted-foreground">当前玩家</span> <span className="mx-2">{deckOwner}</span><span className="text-xs text-primary">更换玩家</span></> : "从你的 Riot ID 开始"}</summary>
+        <form className="mt-3 flex flex-wrap items-start gap-3" onSubmit={(e) => { e.preventDefault(); if (ready && !busy) search(me); }}>
           <RiotIdField label="你的 Riot ID" placeholder="Name#NA1" value={me} onChange={setMe} />
           <Button className="mt-5 w-full sm:w-auto" disabled={busy || !ready}>开始滑卡</Button>
         </form>
-      </Card>
+      </details>
 
       <div className="space-y-3">
         {loading && <LookupProgress label={loading} hint={loading.startsWith("正在读取") ? "第一次查询的玩家大约需要 2 分钟，之后会缓存。" : undefined} />}
@@ -142,16 +152,18 @@ export default function FindPage() {
       </div>
 
       {partners && partners.length > 0 && (
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,4fr)_minmax(0,8fr)] lg:items-start" data-testid="deck">
-          <DeckSidebar className="max-h-80 lg:h-[26rem] lg:max-h-none" mutual={mutual} likes={likes} onOpen={(p) => setFocus(cardKey(p))} />
-
-          <div className="min-w-0 space-y-3">
-            <div className="relative h-[30rem] lg:h-[26rem]">
+        <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start" data-testid="deck">
+          <div className="swipe-stage min-w-0 rounded-3xl px-2 pb-5 pt-4 sm:px-6">
+            <div className="mx-auto mb-4 flex max-w-[30rem] items-center justify-between px-1 text-xs text-muted-foreground">
+              <span className="font-medium text-foreground">为你推荐 <span className="ml-2 font-normal text-muted-foreground">按预测胜率排序</span></span>
+              <span aria-live="polite">剩余 {remaining.length} / {partners.length}</span>
+            </div>
+            <div className="relative mx-auto h-[33rem] max-w-[30rem] sm:h-[35rem]">
               {top ? (
                 <>
-                  {behind && <div className="absolute inset-x-3 inset-y-0 translate-y-2 rounded-xl border bg-card opacity-60" aria-hidden />}
+                  {behind && <><div className="absolute inset-x-6 inset-y-0 translate-y-4 rounded-3xl border bg-card opacity-40" aria-hidden /><div className="absolute inset-x-3 inset-y-0 translate-y-2 rounded-3xl border bg-card opacity-80" aria-hidden /></>}
                   <div className="absolute inset-0">
-                    <SwipeCard key={cardKey(top)} p={top} info={info} fling={fling} onSwiped={swiped} likesYou={likesYou(top)} />
+                    <SwipeCard key={cardKey(top)} p={top} info={info} fling={fling} onSwipeStart={setFling} onSwiped={swiped} likesYou={likesYou(top)} />
                   </div>
                 </>
               ) : (
@@ -166,21 +178,29 @@ export default function FindPage() {
               )}
             </div>
 
-            <div className="flex flex-wrap items-center gap-2" data-testid="gamepad">
-              <Button variant="outline" aria-label="跳过" disabled={!top || !!fling} onClick={() => setFling("pass")}>
-                <X /> 跳过
+            <div className="mt-7 flex items-end justify-center gap-7" data-testid="gamepad">
+              <div className="flex flex-col items-center gap-2">
+              <Button variant="outline" className="size-12 rounded-full bg-card p-0 text-muted-foreground" aria-label="撤销上一次跳过" disabled={!log.lastPass || !!fling} onClick={undo}>
+                <RotateCcw className="size-5!" />
               </Button>
-              <Button aria-label="喜欢" disabled={!top || !!fling} onClick={() => setFling("like")}>
-                <Heart /> 喜欢
+              <span className="text-xs text-muted-foreground">撤销</span>
+              </div>
+              <div className="flex flex-col items-center gap-2">
+              <Button variant="outline" className="size-16 rounded-full bg-card p-0 shadow-sm hover:border-bad/40 hover:bg-bad/10 hover:text-bad" aria-label="跳过" disabled={!top || !!fling} onClick={() => setFling("pass")}>
+                <X className="size-7!" />
               </Button>
-              <Button variant="ghost" aria-label="撤销上一次跳过" disabled={!log.lastPass || !!fling} onClick={undo}>
-                <RotateCcw /> 撤销
+              <span className="text-xs text-muted-foreground">跳过</span>
+              </div>
+              <div className="flex flex-col items-center gap-2">
+              <Button className="size-16 rounded-full bg-good p-0 text-white shadow-lg shadow-good/20 hover:bg-good/90" aria-label="喜欢" disabled={!top || !!fling} onClick={() => setFling("like")}>
+                <Heart className="size-7!" />
               </Button>
-              <span className="text-xs text-muted-foreground sm:ml-auto">
-                拖动卡片或按 ← → 滑卡，点卡片左右两半翻页。还剩 {remaining.length} 张。
-              </span>
+              <span className="text-xs text-muted-foreground">喜欢</span>
+              </div>
             </div>
+            <p className="mt-5 flex items-center justify-center gap-2 text-[11px] text-muted-foreground"><ArrowLeft className="size-3" /> 左滑跳过 <span className="mx-1">·</span> 右滑喜欢 <ArrowRight className="size-3" /><span className="hidden sm:inline">，也可使用方向键</span></p>
           </div>
+          <DeckSidebar className="max-h-96 lg:mt-12 lg:max-h-[35rem]" mutual={mutual} likes={likes} disabled={!!fling} onOpen={(p) => { if (!fling) setFocus(cardKey(p)); }} />
         </div>
       )}
 
@@ -190,6 +210,7 @@ export default function FindPage() {
           演示版：滑卡记录只存在这个浏览器里；搭配评分 50 以上的玩家视为也喜欢了你。登录功能上线后换成真实会员。
         </p>
       )}
+      </div>
 
       {matched && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-labelledby="match-title" data-testid="match-dialog">

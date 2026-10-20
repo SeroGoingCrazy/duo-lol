@@ -7,6 +7,7 @@
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "test:e2e": "playwright test",
+    "test:ui": "playwright test --config playwright.ui.config.ts",
     "sync-icons": "node scripts/sync-champion-icons.mjs"
   },
   "dependencies": {

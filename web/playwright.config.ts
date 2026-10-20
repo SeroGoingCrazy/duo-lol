@@ -9,6 +9,7 @@ const chromium = "/opt/pw-browsers/chromium";
 
 export default defineConfig({
   testDir: "./e2e",
+  testIgnore: "**/*-ui.spec.ts",
   timeout: 60_000,
   use: {
     baseURL: "http://127.0.0.1:3100",
@@ -24,7 +25,7 @@ export default defineConfig({
     },
     {
       command: "npm run build && npx next start -p 3100",
-      env: { DUO_API_URL: "http://127.0.0.1:8100" },
+      env: { DUO_API_URL: "http://127.0.0.1:8100", DUO_NEXT_DIST_DIR: ".next-e2e" },
       url: "http://127.0.0.1:3100",
       timeout: 180_000,
       reuseExistingServer: false,
