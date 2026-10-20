@@ -1,44 +1,50 @@
-import ChampionIcon from "@/components/ChampionIcon";
-import { pct, type PairResult } from "@/lib/api";
+"use client";
+import ChampionPairTable from "@/components/ChampionPairTable";
+import PlayerCard from "@/components/PlayerCard";
+import ScoreBadge, { ScoreHelp, scoreSummary } from "@/components/ScoreBadge";
+import { Card, CardTitle } from "@/components/ui/card";
+import { pct, points, type PairResult } from "@/lib/api";
+import { useChampionInfo } from "@/lib/useChampionInfo";
+import { cn } from "@/lib/utils";
 
 export default function PairResultView({ r }: { r: PairResult }) {
+  const info = useChampionInfo();
+  const up = r.win_rate_delta >= 0;
   return (
-    <div className="panel" data-testid="pair-result">
-      <div className="muted">预测胜率</div>
-      <div className="big" data-testid="win-rate">{pct(r.win_rate)}</div>
-      <div className={r.win_rate_delta >= 0 ? "good" : "bad"} data-testid="win-rate-delta">
-        比你们各自单排{r.win_rate_delta >= 0 ? "高" : "低"} {pct(Math.abs(r.win_rate_delta))}
-        <span className="muted">（单排基线 {pct(r.solo_baselines.a)} / {pct(r.solo_baselines.b)}）</span>
-      </div>
-
-      <h3>建议位置</h3>
-      <div data-testid="roles">{r.a.riot_id} 打 <b>{r.roles.a}</b>，{r.b.riot_id} 打 <b>{r.roles.b}</b></div>
-
-      <h3>最佳英雄组合</h3>
-      <div className="muted pair-legend">左边是 {r.a.riot_id}，右边是 {r.b.riot_id}</div>
-      <ol className="champ-pairs" data-testid="top-pairs">
-        {r.top_pairs.map((p) => (
-          <li key={`${p.champion_a}-${p.champion_b}`}>
-            <div className="champ-pair">
-              <ChampionIcon champion={p.champion_a} />
-              <span className="muted">+</span>
-              <ChampionIcon champion={p.champion_b} />
+    <div className="space-y-4" data-testid="pair-result">
+      <Card>
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <div className="mb-2 flex items-center gap-1.5 text-sm text-muted-foreground">搭配评分 <ScoreHelp /></div>
+            <ScoreBadge score={r.score} />
+            {r.score != null && <div className="mt-2 text-sm text-muted-foreground">{scoreSummary(r.score)}</div>}
+          </div>
+          <div className="text-right">
+            <div className="text-sm text-muted-foreground">预测胜率</div>
+            <div className="text-2xl font-semibold tabular-nums" data-testid="win-rate">{pct(r.win_rate)}</div>
+            <div className={cn("text-sm", up ? "text-good" : "text-bad")} data-testid="win-rate-delta">
+              比你们单排平均{up ? "高" : "低"} {points(r.win_rate_delta)}
             </div>
-            <div className="champ-names">
-              <div>{p.champion_a} + {p.champion_b}</div>
-              <div className="muted">全服 {p.pair_games.toLocaleString()} 局</div>
-            </div>
-            <div className="champ-wr">{pct(p.win_rate)}</div>
-          </li>
-        ))}
-      </ol>
+          </div>
+        </div>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <PlayerCard player={r.a} role={r.roles.a} info={info} />
+          <PlayerCard player={r.b} role={r.roles.b} info={info} />
+        </div>
+        <div className="mt-2 text-xs text-muted-foreground">
+          单排基线：{r.a.riot_id} {pct(r.solo_baselines.a)}，{r.b.riot_id} {pct(r.solo_baselines.b)}
+        </div>
+      </Card>
 
-      <h3>理由</h3>
-      <ul className="reasons" data-testid="reasons">
-        {r.reasons.map((x) => <li key={x}>{x}</li>)}
-      </ul>
+      <Card>
+        <CardTitle>建议位置和最佳英雄组合</CardTitle>
+        <ChampionPairTable a={r.a.riot_id} b={r.b.riot_id} roles={r.roles} pairs={r.top_pairs} info={info} />
+      </Card>
+
       {r.notes.length > 0 && (
-        <ul className="reasons muted">{r.notes.map((x) => <li key={x}>{x}</li>)}</ul>
+        <ul className="space-y-1 text-xs text-muted-foreground" data-testid="notes">
+          {r.notes.map((x) => <li key={x}>* {x}</li>)}
+        </ul>
       )}
     </div>
   );

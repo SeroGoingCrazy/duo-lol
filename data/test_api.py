@@ -15,6 +15,7 @@ import collect  # noqa: E402
 import db  # noqa: E402
 import fake_riot  # noqa: E402
 import recommend  # noqa: E402
+import score_scale  # noqa: E402
 import service  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
@@ -34,7 +35,10 @@ def client():
 
 
 def lookup(client, riot_id):
-    job = client.post("/api/lookups", json={"riot_id": riot_id}).json()["job_id"]
+    started = client.post("/api/lookups", json={"riot_id": riot_id}).json()
+    job = started["job_id"]
+    if job is None:   # already cached
+        return {"status": "done", "player": started["player"]}
     for _ in range(200):
         status = client.get(f"/api/lookups/{job}").json()
         if status["status"] != "running":
@@ -117,7 +121,46 @@ def test_recommendations_top5_duo_eligible(client):
     for p in out["partners"]:
         assert recommend.can_duo(me, ranks[p["riot_id"]])
         assert p["riot_id"] != out["me"]["riot_id"]
-        assert set(p) == {"riot_id", "tier", "win_rate", "win_rate_delta", "roles", "reasons"}
+        assert set(p) == {"riot_id", "tier", "division", "win_rate", "win_rate_delta", "score", "roles",
+                          "top_pairs", "reasons"}
+        assert 1 <= len(p["top_pairs"]) <= 3
+
+
+def test_cached_lookup_answers_without_a_job(client):
+    lookup(client, "Alpha#NA1")
+    out = client.post("/api/lookups", json={"riot_id": "alpha#na1"}).json()
+    assert out["job_id"] is None and out["player"]["games"] == 40
+
+
+def test_same_player_twice_is_rejected(client):
+    lookup(client, "Alpha#NA1")
+    r = client.post("/api/pair", json={"a": "Alpha#NA1", "b": "ALPHA #na1"})
+    assert r.status_code == 400 and "同一个玩家" in r.json()["detail"]
+
+
+def test_find_partners_with_self_report(client):
+    lookup(client, "NewTwo#NA1")   # a fake Gold player, so the Gold/Platinum pool can duo
+    assert client.post("/api/recommendations", json={"riot_id": "NewTwo#NA1"}).status_code == 422
+    picks = [{"champion": "Ahri", "position": "MIDDLE"}]
+    out = client.post("/api/recommendations", json={"riot_id": "NewTwo#NA1", "self_report": {"picks": picks}}).json()
+    assert out["partners"] and any("自选英雄" in n for n in out["notes"])
+
+
+def test_score_follows_fitted_normal(client):
+    with db.connect(DB) as conn:
+        scale = score_scale.fit(conn)
+    assert scale and scale["pairs"] >= 2 and scale["std"] > 0
+    assert score_scale.duo_score(scale["mean"], scale) == 50
+    assert score_scale.duo_score(scale["mean"] + scale["std"], scale) == 84
+    assert score_scale.duo_score(0.9, scale) <= 100 and score_scale.duo_score(0.1, scale) >= 0
+    assert score_scale.duo_score(0.5, None) is None
+    api.scale = scale
+    try:
+        lookup(client, "Alpha#NA1"); lookup(client, "Bravo#NA1")
+        out = client.post("/api/pair", json={"a": "Alpha#NA1", "b": "Bravo#NA1"}).json()
+        assert out["score"] == score_scale.duo_score(out["win_rate"], scale)
+    finally:
+        api.scale = None
 
 
 @pytest.mark.parametrize("a, b, ok", [
