@@ -12,7 +12,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="zh-CN">
       <body className="min-h-screen antialiased">
         <TooltipProvider delayDuration={150}>
-          <main className="mx-auto max-w-3xl px-4 pb-16 pt-6">
+          <main className="mx-auto w-full max-w-[96rem] px-4 pb-16 pt-6 sm:px-6 lg:px-10 lg:pt-8">
             {children}
             <footer className="mt-12 text-xs text-muted-foreground">
               非 Riot Games 官方产品，与 Riot Games 无关。预测算法改编自{" "}

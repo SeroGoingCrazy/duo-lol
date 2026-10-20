@@ -82,7 +82,7 @@ export default function PairPage() {
   return (
     <>
       <Nav current="pair" />
-      <h1 className="mb-1 text-2xl font-bold tracking-tight">查组合</h1>
+      <h1 className="mb-1 text-2xl font-bold tracking-tight lg:text-3xl">查组合</h1>
       <p className="mb-5 text-sm text-muted-foreground">输入两个美服 Riot ID，看你们一起打单双排的搭配评分和最佳英雄组合。</p>
 
       <Card className="mb-4">
@@ -90,17 +90,17 @@ export default function PairPage() {
           <RiotIdField label="玩家 A" placeholder="Name#NA1" value={a} onChange={setA} />
           <RiotIdField label="玩家 B" placeholder="Name#NA1" value={b} onChange={setB}
             error={same ? "两个 Riot ID 是同一个人，请填另一位玩家" : null} />
-          <Button className="mt-5" disabled={busy || !ready}>预测</Button>
+          <Button className="mt-5 w-full sm:w-auto" disabled={busy || !ready}>预测</Button>
         </form>
       </Card>
 
-      <div className="space-y-4">
+      <div className="flex flex-col gap-4">
         {loadingId && <LookupProgress label={`正在读取 ${loadingId} 本赛季的单双排对局…`} hint={FIRST_LOOKUP_HINT} />}
         {!loadingId && busy && <LookupProgress label="正在计算搭配评分…" />}
         {error && <Alert variant="error">{error}</Alert>}
 
         {players && pending.slice(0, 1).map((k) => (
-          <SelfReportForm key={k} player={players[k === "a" ? 0 : 1]} champions={champions} initial={drafts[k]}
+          <SelfReportForm key={k} className="max-w-3xl" player={players[k === "a" ? 0 : 1]} champions={champions} initial={drafts[k]}
             step={needs.length > 1 ? `第 ${needs.indexOf(k) + 1} / ${needs.length} 位玩家` : undefined}
             onSubmit={(r) => setReports((x) => ({ ...x, [k]: r }))} />
         ))}
@@ -109,7 +109,7 @@ export default function PairPage() {
           <>
             <PairResultView r={result} />
             {needs.length > 0 && (
-              <Button variant="outline" onClick={() => { setResult(null); setDrafts(reports); setReports({}); }}>修改自选英雄</Button>
+              <Button variant="outline" className="self-start" onClick={() => { setResult(null); setDrafts(reports); setReports({}); }}>修改自选英雄</Button>
             )}
           </>
         )}
