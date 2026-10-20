@@ -4,6 +4,7 @@ import ChampionPairTable from "@/components/ChampionPairTable";
 import PositionIcon from "@/components/PositionIcon";
 import ScoreBadge, { ScoreHelp, scoreSummary } from "@/components/ScoreBadge";
 import { Badge } from "@/components/ui/badge";
+import { CardTitle } from "@/components/ui/card";
 import { pct, points, type Partner } from "@/lib/api";
 import type { ChampionInfo } from "@/lib/champions";
 import type { Swipe } from "@/lib/deck";
@@ -92,70 +93,89 @@ export default function SwipeCard({ p, info, fling, onSwiped, likesYou = false }
       ref={card}
       data-testid="swipe-card"
       className={cn(
-        "relative flex h-full select-none flex-col overflow-hidden rounded-2xl border bg-card shadow-lg touch-pan-y",
+        "relative flex h-full select-none flex-col rounded-xl border bg-card p-5 shadow-sm touch-pan-y",
         dragging ? "" : "transition-transform duration-200 ease-out motion-reduce:transition-none",
       )}
-      style={{ transform: `translateX(${x}px) rotate(${x / 25}deg)` }}
+      style={{ transform: `translateX(${x}px) rotate(${x / 40}deg)` }}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerCancel={() => { drag.current = null; setDragging(false); setDx(0); }}
     >
-      <div className="flex gap-1.5 px-4 pt-3" aria-hidden>
-        {PAGES.map((name, i) => (
-          <span key={name} className={cn("h-1 flex-1 rounded-full", i === page ? "bg-primary" : "bg-border")} />
-        ))}
-      </div>
-      <div className="flex items-center justify-between gap-2 px-5 pb-2 pt-3">
-        <div className="flex flex-wrap items-center gap-2">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex gap-1" data-testid="card-page">
+          {PAGES.map((name, i) => (
+            <button
+              key={name} type="button" aria-pressed={i === page}
+              onPointerDown={(e) => e.stopPropagation()} onPointerUp={(e) => e.stopPropagation()} onClick={() => setPage(i)}
+              className={cn("cursor-pointer rounded-md px-3 py-1.5 text-sm transition-colors",
+                i === page ? "bg-accent font-semibold text-foreground" : "text-muted-foreground hover:text-foreground")}
+            >
+              {name}
+            </button>
+          ))}
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5">
           <Badge>{tierLabel(p.tier, p.division)}</Badge>
           {likesYou && <Badge className="bg-good/15 text-good">喜欢了你</Badge>}
         </div>
-        <span className="text-xs text-muted-foreground" data-testid="card-page">{page + 1}/{PAGES.length} {PAGES[page]}</span>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5">
+      <div className="min-h-0 flex-1 overflow-y-auto">
         {page === 0 && (
-          <div className="flex h-full flex-col items-center justify-center gap-5 py-4 text-center">
-            <div className="flex items-center gap-1.5 text-sm text-muted-foreground">你们俩的搭配评分 <ScoreHelp /></div>
-            <ScoreBadge score={p.score} />
-            {p.score != null && <div className="text-sm text-muted-foreground">{scoreSummary(p.score)}</div>}
-            <div className="text-sm">
-              预测胜率 <b className="win-rate tabular-nums">{pct(p.win_rate)}</b>
-              <span className={cn("ml-2", up ? "text-good" : "text-bad")}>比单排平均{up ? "高" : "低"} {points(p.win_rate_delta)}</span>
+          <>
+            <div className="flex flex-wrap items-end justify-between gap-4">
+              <div>
+                <div className="mb-2 flex items-center gap-1.5 text-sm text-muted-foreground">搭配评分 <ScoreHelp /></div>
+                <ScoreBadge score={p.score} />
+                {p.score != null && <div className="mt-2 text-sm text-muted-foreground">{scoreSummary(p.score)}</div>}
+              </div>
+              <div className="text-right">
+                <div className="text-sm text-muted-foreground">预测胜率</div>
+                <div className="win-rate text-2xl font-semibold tabular-nums">{pct(p.win_rate)}</div>
+                <div className={cn("text-sm", up ? "text-good" : "text-bad")}>比单排平均{up ? "高" : "低"} {points(p.win_rate_delta)}</div>
+              </div>
             </div>
-            <div className="flex items-center gap-6 text-sm" data-testid="card-roles">
-              <span className="flex items-center gap-2"><span className="text-muted-foreground">你</span><PositionIcon position={p.roles.a} showLabel /></span>
-              <span className="flex items-center gap-2"><span className="text-muted-foreground">TA</span><PositionIcon position={p.roles.b} showLabel /></span>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2" data-testid="card-roles">
+              {([["你", p.roles.a], ["TA", p.roles.b]] as const).map(([who, role]) => (
+                <div key={who} className="min-w-0 rounded-lg border bg-background/40 p-3">
+                  <div className="text-xs text-muted-foreground">{who}打</div>
+                  <div className="mt-1 font-semibold"><PositionIcon position={role} showLabel /></div>
+                </div>
+              ))}
             </div>
             <span className="sr-only">你打{positionLabel(p.roles.a)}，TA 打{positionLabel(p.roles.b)}</span>
-          </div>
+          </>
         )}
         {page === 1 && (
-          <ChampionPairTable a="你" b="TA" roles={p.roles} pairs={p.top_pairs} info={info} />
+          <>
+            <CardTitle>建议位置和最佳英雄组合</CardTitle>
+            <ChampionPairTable a="你" b="TA" roles={p.roles} pairs={p.top_pairs} info={info} />
+          </>
         )}
         {page === 2 && (
-          <ul className="space-y-3 py-2 text-sm" data-testid="reasons">
-            {p.reasons.map((r) => (
-              <li key={r} className="rounded-lg bg-muted px-3 py-2">
-                {localizeReason(r, info, best ? p.top_pairs.flatMap((t) => [t.champion_a, t.champion_b]) : [])}
-              </li>
-            ))}
-          </ul>
+          <>
+            <CardTitle>为什么推荐 TA</CardTitle>
+            <ul className="space-y-2 text-sm" data-testid="reasons">
+              {p.reasons.map((r) => (
+                <li key={r} className="rounded-lg border bg-background/40 px-3 py-2">
+                  {localizeReason(r, info, best ? p.top_pairs.flatMap((t) => [t.champion_a, t.champion_b]) : [])}
+                </li>
+              ))}
+            </ul>
+          </>
         )}
       </div>
 
       {hint && (
-        <span
-          className={cn(
-            "pointer-events-none absolute top-14 rounded-md border-4 px-3 py-1 text-2xl font-black tracking-widest",
-            hint === "like" ? "left-6 -rotate-12 border-good text-good" : "right-6 rotate-12 border-bad text-bad",
-          )}
+        <Badge
+          className={cn("pointer-events-none absolute -top-3 left-1/2 -translate-x-1/2 border px-3 py-1 text-sm font-semibold shadow-sm",
+            hint === "like" ? "border-good bg-card text-good" : "border-bad bg-card text-bad")}
           style={{ opacity: hintOpacity }}
           aria-hidden
         >
           {hint === "like" ? "喜欢" : "跳过"}
-        </span>
+        </Badge>
       )}
     </div>
   );

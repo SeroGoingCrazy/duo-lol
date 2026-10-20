@@ -127,10 +127,10 @@ export default function FindPage() {
         推荐池里能和你一起排的玩家，按搭配评分从高到低一张张发给你。右滑喜欢、左滑跳过，双方都喜欢就互选，互选后才能看到对方的 Riot ID。
       </p>
 
-      <Card className="mb-4 max-w-3xl">
+      <Card className="mb-4">
         <form className="flex flex-wrap items-start gap-3" onSubmit={(e) => { e.preventDefault(); if (ready) search(me); }}>
           <RiotIdField label="你的 Riot ID" placeholder="Name#NA1" value={me} onChange={setMe} />
-          <Button className="mt-5" disabled={busy || !ready}>开始滑卡</Button>
+          <Button className="mt-5 w-full sm:w-auto" disabled={busy || !ready}>开始滑卡</Button>
         </form>
       </Card>
 
@@ -142,14 +142,14 @@ export default function FindPage() {
       </div>
 
       {partners && partners.length > 0 && (
-        <div className="mt-2 grid gap-6 lg:grid-cols-[minmax(16rem,22rem)_minmax(0,30rem)] lg:justify-center" data-testid="deck">
-          <DeckSidebar className="max-h-72 lg:h-[32rem] lg:max-h-none" mutual={mutual} likes={likes} onOpen={(p) => setFocus(cardKey(p))} />
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,4fr)_minmax(0,8fr)] lg:items-start" data-testid="deck">
+          <DeckSidebar className="max-h-80 lg:h-[26rem] lg:max-h-none" mutual={mutual} likes={likes} onOpen={(p) => setFocus(cardKey(p))} />
 
-          <div className="flex flex-col items-center gap-4">
-            <div className="relative h-[32rem] w-full max-w-[30rem]">
+          <div className="min-w-0 space-y-3">
+            <div className="relative h-[30rem] lg:h-[26rem]">
               {top ? (
                 <>
-                  {behind && <div className="absolute inset-0 translate-y-2 scale-[0.97] rounded-2xl border bg-card opacity-60" aria-hidden />}
+                  {behind && <div className="absolute inset-x-3 inset-y-0 translate-y-2 rounded-xl border bg-card opacity-60" aria-hidden />}
                   <div className="absolute inset-0">
                     <SwipeCard key={cardKey(top)} p={top} info={info} fling={fling} onSwiped={swiped} likesYou={likesYou(top)} />
                   </div>
@@ -166,20 +166,20 @@ export default function FindPage() {
               )}
             </div>
 
-            <div className="flex items-center gap-5" data-testid="gamepad">
-              <Button variant="outline" className="size-12 rounded-full p-0" aria-label="撤销上一次跳过" disabled={!log.lastPass || !!fling} onClick={undo}>
-                <RotateCcw />
+            <div className="flex flex-wrap items-center gap-2" data-testid="gamepad">
+              <Button variant="outline" aria-label="跳过" disabled={!top || !!fling} onClick={() => setFling("pass")}>
+                <X /> 跳过
               </Button>
-              <Button variant="outline" className="size-16 rounded-full p-0 text-bad [&_svg]:size-7" aria-label="跳过" disabled={!top || !!fling} onClick={() => setFling("pass")}>
-                <X />
+              <Button aria-label="喜欢" disabled={!top || !!fling} onClick={() => setFling("like")}>
+                <Heart /> 喜欢
               </Button>
-              <Button variant="outline" className="size-16 rounded-full p-0 text-good [&_svg]:size-7" aria-label="喜欢" disabled={!top || !!fling} onClick={() => setFling("like")}>
-                <Heart />
+              <Button variant="ghost" aria-label="撤销上一次跳过" disabled={!log.lastPass || !!fling} onClick={undo}>
+                <RotateCcw /> 撤销
               </Button>
+              <span className="text-xs text-muted-foreground sm:ml-auto">
+                拖动卡片或按 ← → 滑卡，点卡片左右两半翻页。还剩 {remaining.length} 张。
+              </span>
             </div>
-            <p className="text-xs text-muted-foreground">
-              拖动卡片或用 ← → 键滑卡，点卡片左右两半翻页。还剩 {remaining.length} 张。
-            </p>
           </div>
         </div>
       )}
