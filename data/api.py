@@ -3,9 +3,11 @@
     uv run uvicorn api:app --app-dir data --port 8000
 
 Env: DUO_DB (SQLite path, default lol_duo.sqlite), DUO_GAP_TABLE (段位差 JSON from
-evaluate.py, default data/rank_gap.json), RIOT_API_KEY via .env.
+evaluate.py, default data/rank_gap.json), DUO_SCORE_SCALE (搭配评分 scale from score_scale.py,
+default data/score_scale.json; fitted in the background at startup if missing), RIOT_API_KEY via .env.
 New players are fetched in a background job whose progress the site polls (PRD §5.2).
 """
+import json
 import os
 import threading
 import time
@@ -19,15 +21,20 @@ from pydantic import BaseModel, Field
 import db
 import predict
 import recommend
+import score_scale
 import service
 from stats_source import CachedSource, OwnDataSource
 
 DB_PATH = os.environ.get("DUO_DB", "lol_duo.sqlite")
 GAP_TABLE = predict.load_gap_table(os.environ.get("DUO_GAP_TABLE", str(Path(__file__).parent / "rank_gap.json")))
+SCORE_SCALE_PATH = os.environ.get("DUO_SCORE_SCALE", str(Path(__file__).parent / "score_scale.json"))
 MAX_PICKS, MAX_PICK_ROLES = 5, 2   # PRD §2.3: up to 5 自选英雄 in up to 2 positions
-JOB_KEEP_SECONDS = 600              # finished lookup jobs are forgotten after this long
+JOB_KEEP_SECONDS = 600
+TIER_NAMES = {"IRON": "黑铁", "BRONZE": "青铜", "SILVER": "白银", "GOLD": "黄金", "PLATINUM": "铂金",
+              "EMERALD": "翡翠", "DIAMOND": "钻石", "MASTER": "大师", "GRANDMASTER": "宗师", "CHALLENGER": "王者"}              # finished lookup jobs are forgotten after this long
 
 app = FastAPI(title="duo-lol")
+scale = score_scale.load_scale(SCORE_SCALE_PATH)
 jobs = {}
 jobs_lock = threading.Lock()
 _client = None
@@ -51,6 +58,44 @@ def riot_client():
                 from riot import RiotClient
                 _client = RiotClient()
         return _client
+
+
+@app.on_event("startup")
+def fit_score_scale_if_missing():
+    """Without a saved scale, fit one from the database in the background; scores are None until then."""
+    if scale:
+        return
+
+    def run():
+        global scale
+        conn = db.connect(DB_PATH)
+        try:
+            fitted = score_scale.fit(conn, GAP_TABLE)
+        finally:
+            conn.close()
+        if fitted:
+            scale = fitted
+            try:
+                with open(SCORE_SCALE_PATH, "w") as f:
+                    json.dump(fitted, f, indent=2)
+            except OSError:
+                pass   # read-only checkout: keep it in memory only
+
+    threading.Thread(target=run, daemon=True).start()
+
+
+def friendly_error(e):
+    """Lookup failure as a sentence for the page; never includes the key or a URL."""
+    status = getattr(getattr(e, "response", None), "status_code", None)
+    if status in (401, 403):
+        return "Riot API Key 已失效，请在 .env 里换一个新的 Key 后重启服务"
+    if status == 429 or isinstance(e, RuntimeError) and str(e).startswith("Gave up"):
+        return "Riot 接口太忙了，请过一两分钟再试"
+    if isinstance(e, RuntimeError) and "RIOT_API_KEY" in str(e):
+        return "服务还没配置 Riot API Key"
+    if isinstance(e, (OSError, ConnectionError)) or type(e).__module__.startswith("requests"):
+        return "连不上 Riot 服务器，请稍后再试"
+    return "查询失败，请稍后再试"
 
 
 def prune_jobs(now):
@@ -86,6 +131,10 @@ def start_lookup(req: LookupRequest):
         service.parse_riot_id(req.riot_id)
     except ValueError as e:
         raise HTTPException(400, str(e))
+    with connect() as conn:
+        hit = service.cached_player(conn, req.riot_id)
+    if hit:   # cached: no job, the page shows it at once
+        return {"job_id": None, "player": player_summary(hit)}
     key = service.riot_id_key(req.riot_id)
     with jobs_lock:
         prune_jobs(time.time())
@@ -107,7 +156,7 @@ def start_lookup(req: LookupRequest):
         except service.PlayerNotFound as e:
             result = {"status": "error", "error": str(e)}
         except Exception as e:  # surfaced to the page; the key itself never appears in messages
-            result = {"status": "error", "error": f"查询失败：{type(e).__name__}"}
+            result = {"status": "error", "error": friendly_error(e)}
         finally:
             conn.close()
         with jobs_lock:
@@ -143,13 +192,17 @@ class PairRequest(BaseModel):
     b_self_report: SelfReport | None = None
 
 
+def top_pair_summary(p):
+    return {k: p[k] for k in ("champion_a", "champion_b", "win_rate", "pair_games")}
+
+
 def scored_profile(conn, riot_id, self_report):
     """(player, profile used for scoring, note about how it was scored or None)."""
     player = service.cached_player(conn, riot_id)
     if not player:
         raise HTTPException(409, f"{riot_id} 还没有查询过")
     if not player["profile"]["insufficient_data"]:
-        note = f"{player['riot_id']} 本赛季未定级，按 {service.UNRANKED_TIER} 估算" if player["unranked"] else None
+        note = f"{player['riot_id']} 本赛季未定级，按{TIER_NAMES[service.UNRANKED_TIER]}估算" if player["unranked"] else None
         return player, player["profile"], note
     if not self_report or not self_report.picks:
         raise HTTPException(422, {"insufficient_data": riot_id})
@@ -160,7 +213,7 @@ def scored_profile(conn, riot_id, self_report):
         tier = player["tier"] or service.normalize_tier(self_report.tier)
     except ValueError as e:
         raise HTTPException(400, str(e))
-    note = f"{player['riot_id']} 数据不足，按自选英雄在 {tier} 的全服胜率估算"
+    note = f"{player['riot_id']} 数据不足，按自选英雄在{TIER_NAMES.get(tier, tier)}的全服胜率估算"
     return player, predict.self_reported_profile(tier, [(p.champion, p.position) for p in picks]), note
 
 
@@ -169,27 +222,45 @@ def pair(req: PairRequest):
     with connect() as conn:
         pa, prof_a, note_a = scored_profile(conn, req.a, req.a_self_report)
         pb, prof_b, note_b = scored_profile(conn, req.b, req.b_self_report)
+        if pa["puuid"] == pb["puuid"]:
+            raise HTTPException(400, "两个 Riot ID 是同一个玩家，请填两个不同的人")
         out = predict.predict_pair(CachedSource(OwnDataSource(conn)), prof_a, prof_b, GAP_TABLE)
     if not out:
         raise HTTPException(422, "两人没有可分配的位置组合")
     notes = [n for n in (note_a, note_b) if n]
-    return {"a": player_summary(pa), "b": player_summary(pb), **out, "notes": notes}
+    return {"a": player_summary(pa), "b": player_summary(pb), **out,
+            "top_pairs": [top_pair_summary(p) for p in out["top_pairs"]],
+            "score": score_scale.duo_score(out["win_rate"], scale), "notes": notes}
+
+
+class RecommendRequest(BaseModel):
+    riot_id: str
+    self_report: SelfReport | None = None
+
+
+def partner_list(conn, me, profile):
+    found = recommend.recommend(conn, CachedSource(OwnDataSource(conn)), {**me, "profile": profile}, GAP_TABLE)
+    return [
+        {"riot_id": r["riot_id"], "tier": r["tier"], "division": r["division"], "win_rate": r["win_rate"],
+         "win_rate_delta": r["win_rate_delta"], "score": score_scale.duo_score(r["win_rate"], scale),
+         "roles": r["roles"], "top_pairs": [top_pair_summary(p) for p in r["top_pairs"]],
+         "reasons": r["reasons"]}
+        for r in found
+    ]
 
 
 @app.get("/api/recommendations/{riot_id}")
 def recommendations(riot_id: str):
+    return recommend_for(RecommendRequest(riot_id=riot_id))
+
+
+@app.post("/api/recommendations")
+def recommend_for(req: RecommendRequest):
+    """找搭子; a 数据不足 player sends 自选英雄 the same way as for /api/pair."""
     with connect() as conn:
-        me = service.cached_player(conn, riot_id)
-        if not me:
-            raise HTTPException(409, f"{riot_id} 还没有查询过")
-        if me["profile"]["insufficient_data"]:
-            raise HTTPException(422, {"insufficient_data": riot_id})
-        found = recommend.recommend(conn, CachedSource(OwnDataSource(conn)), me, GAP_TABLE)
-    return {"me": player_summary(me), "partners": [
-        {"riot_id": r["riot_id"], "tier": r["tier"], "win_rate": r["win_rate"],
-         "win_rate_delta": r["win_rate_delta"], "roles": r["roles"], "reasons": r["reasons"]}
-        for r in found
-    ]}
+        me, profile, note = scored_profile(conn, req.riot_id, req.self_report)
+        return {"me": player_summary(me), "partners": partner_list(conn, me, profile),
+                "notes": [note] if note else []}
 
 
 @app.get("/api/champions")

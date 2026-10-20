@@ -29,11 +29,13 @@ class OwnDataSource:
         return row[0], row[1]
 
     def champion_pair(self, champ_a, pos_a, champ_b, pos_b):
+        # The unary + keeps SQLite from also using idx_part_champ for b; b is found by match_id
+        # instead, which turns a ~5 s scan into ~15 ms on the collected data.
         row = self.conn.execute(
             """SELECT COALESCE(SUM(a.win), 0), COUNT(*)
                FROM participants a JOIN participants b
                  ON a.match_id=b.match_id AND a.team_id=b.team_id AND a.puuid<>b.puuid
-               WHERE a.champion_name=? AND a.position=? AND b.champion_name=? AND b.position=?""",
+               WHERE a.champion_name=? AND a.position=? AND +b.champion_name=? AND +b.position=?""",
             (champ_a, pos_a, champ_b, pos_b),
         ).fetchone()
         return row[0], row[1]

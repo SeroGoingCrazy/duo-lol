@@ -109,6 +109,6 @@ def recommend(conn, source, me, gap_table=None, require_opt_in=False, top_n=TOP_
         profile["tier"] = tier
         out = predict.predict_pair(source, me["profile"], profile, gap_table)
         if out:
-            results.append({"riot_id": riot_id, "tier": tier, **out})
+            results.append({"riot_id": riot_id, "tier": tier, "division": rank[1], **out})
     results.sort(key=lambda r: r["win_rate"], reverse=True)
     return results[:top_n]
