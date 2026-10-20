@@ -29,6 +29,7 @@ DB_PATH = os.environ.get("DUO_DB", "lol_duo.sqlite")
 GAP_TABLE = predict.load_gap_table(os.environ.get("DUO_GAP_TABLE", str(Path(__file__).parent / "rank_gap.json")))
 SCORE_SCALE_PATH = os.environ.get("DUO_SCORE_SCALE", str(Path(__file__).parent / "score_scale.json"))
 MAX_PICKS, MAX_PICK_ROLES = 5, 2   # PRD §2.3: up to 5 自选英雄 in up to 2 positions
+MAX_DECK = 200     # 牌堆 size cap for one request
 JOB_KEEP_SECONDS = 600
 TIER_NAMES = {"IRON": "黑铁", "BRONZE": "青铜", "SILVER": "白银", "GOLD": "黄金", "PLATINUM": "铂金",
               "EMERALD": "翡翠", "DIAMOND": "钻石", "MASTER": "大师", "GRANDMASTER": "宗师", "CHALLENGER": "王者"}              # finished lookup jobs are forgotten after this long
@@ -236,10 +237,12 @@ def pair(req: PairRequest):
 class RecommendRequest(BaseModel):
     riot_id: str
     self_report: SelfReport | None = None
+    limit: int = Field(recommend.TOP_N, ge=1, le=MAX_DECK)   # the 牌堆 asks for the whole ranked pool
 
 
-def partner_list(conn, me, profile):
-    found = recommend.recommend(conn, CachedSource(OwnDataSource(conn)), {**me, "profile": profile}, GAP_TABLE)
+def partner_list(conn, me, profile, limit=recommend.TOP_N):
+    found = recommend.recommend(conn, CachedSource(OwnDataSource(conn)), {**me, "profile": profile}, GAP_TABLE,
+                                top_n=limit)
     return [
         {"riot_id": r["riot_id"], "tier": r["tier"], "division": r["division"], "win_rate": r["win_rate"],
          "win_rate_delta": r["win_rate_delta"], "score": score_scale.duo_score(r["win_rate"], scale),
@@ -259,7 +262,7 @@ def recommend_for(req: RecommendRequest):
     """找搭子; a 数据不足 player sends 自选英雄 the same way as for /api/pair."""
     with connect() as conn:
         me, profile, note = scored_profile(conn, req.riot_id, req.self_report)
-        return {"me": player_summary(me), "partners": partner_list(conn, me, profile),
+        return {"me": player_summary(me), "partners": partner_list(conn, me, profile, req.limit),
                 "notes": [note] if note else []}
 
 
