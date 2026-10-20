@@ -44,7 +44,7 @@ class FakeClient:
 def test_end_to_end(monkeypatch=None):
     path = os.path.join(tempfile.mkdtemp(), "t.sqlite")
     fake = FakeClient()
-    collect.RiotClient = lambda: fake
+    collect.make_client = lambda: fake
 
     class A:
         db = path; tiers = ["GOLD", "DIAMOND"]; players_per_tier = 4
@@ -61,6 +61,40 @@ def test_end_to_end(monkeypatch=None):
         ON a.match_id=b.match_id AND a.team_id=b.team_id AND a.puuid<b.puuid""").fetchone()[0]
     assert pairs == 2 * 2 * 10   # 10 teammate pairs per team
     print("ok")
+
+
+def test_ladder_and_resume():
+    path = os.path.join(tempfile.mkdtemp(), "l.sqlite")
+    fake = FakeClient()
+    pages = []
+
+    def league_entries(tier, div, page=1):
+        pages.append((tier, div, page))
+        if page > 2:
+            return []
+        return [{"puuid": f"{tier}-{div}-{page}-{k}", "tier": tier, "rank": div, "leaguePoints": 0,
+                 "wins": 1, "losses": 1} for k in range(3)]
+    fake.league_entries = league_entries
+    fake.apex_entries = lambda tier: [{"puuid": f"{tier}-x", "tier": tier, "rank": "I", "leaguePoints": 900,
+                                       "wins": 50, "losses": 40}]
+    collect.make_client = lambda: fake
+
+    class A:
+        db = path; tiers = ["GOLD"]; players_per_tier = 4; ladder = True
+        matches_per_player = 3; seed = 1
+        season_start = "2026-01-08"
+    collect.run(A)
+    conn = db.connect(path)
+    assert conn.execute("SELECT COUNT(*) FROM ladder").fetchone()[0] == 7 * 4 * 2 * 3 + 3
+    assert len(pages) == 7 * 4 * 3                 # two full pages and one empty page per division
+    seeds = conn.execute("SELECT puuid FROM seed_progress").fetchall()
+    assert len(seeds) == 4 and all(s[0].startswith("GOLD-") for s in seeds)   # drawn from the ladder
+
+    # Rerun: ladder is done and seeds are done at this game count, so no requests at all.
+    pages.clear(); fake.calls = 0
+    fake.season_match_ids = lambda *a, **k: (_ for _ in ()).throw(AssertionError("refetched a done seed"))
+    collect.run(A)
+    assert pages == [] and fake.calls == 0
 
 
 def test_profile_insufficient_data():

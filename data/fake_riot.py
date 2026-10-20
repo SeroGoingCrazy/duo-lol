@@ -29,7 +29,7 @@ def _puuid(name, tag):
 
 
 class FakeRiotClient:
-    def __init__(self):
+    def __init__(self, **_):   # accepts RiotClient's limiter= and ignores it
         self.names = {}
 
     def _player(self, puuid):

@@ -17,6 +17,11 @@ REGION = "https://americas.api.riotgames.com"  # match-v5 for NA
 
 SOLO_QUEUE = "RANKED_SOLO_5x5"
 SOLO_QUEUE_ID = 420
+APEX_TIERS = {"MASTER": "masterleagues", "GRANDMASTER": "grandmasterleagues", "CHALLENGER": "challengerleagues"}
+
+
+class KeyRejected(RuntimeError):
+    """401/403: the key is wrong or expired (dev keys last 24h). Retrying will not help."""
 
 
 class RateLimiter:
@@ -69,12 +74,20 @@ class RiotClient:
                 continue
             if resp.status_code == 404:
                 return None
+            if resp.status_code in (401, 403):
+                raise KeyRejected(f"Riot rejected RIOT_API_KEY ({resp.status_code}); regenerate it at "
+                                  "https://developer.riotgames.com and update .env")
             resp.raise_for_status()
             return resp.json()
         raise RuntimeError(f"Gave up on {url}")
 
     def league_entries(self, tier, division, page=1):
         return self.get(f"{PLATFORM}/lol/league/v4/entries/{SOLO_QUEUE}/{tier}/{division}", {"page": page}) or []
+
+    def apex_entries(self, tier):
+        """Every Solo/Duo entry in MASTER/GRANDMASTER/CHALLENGER, shaped like league_entries rows."""
+        league = self.get(f"{PLATFORM}/lol/league/v4/{APEX_TIERS[tier]}/by-queue/{SOLO_QUEUE}") or {}
+        return [{**e, "tier": tier} for e in league.get("entries", [])]
 
     def match_ids(self, puuid, count=20, start=0, start_time=None):
         params = {"queue": SOLO_QUEUE_ID, "type": "ranked", "start": start, "count": count}

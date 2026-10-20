@@ -8,8 +8,8 @@ fit slice; metrics are reported on the eval slice, so no number is scored on dat
 Every 组合 (two teammates) is scored with the champions they actually played. The model
 must beat the coin-flip baseline (log loss 0.693) to pass.
 
-Only seed players have a known tier; a teammate's tier falls back to the match's seed tier,
-so most 组合 show a gap of 0 until the collector also fetches teammates' tiers.
+A player's tier comes from their seed entry, else from the 天梯快照 (collect.py --ladder);
+players in neither fall back to the match's seed tier (gap 0).
 """
 import argparse
 import hashlib
@@ -71,7 +71,9 @@ def load_teams(conn):
 
 
 def player_tiers(conn):
-    return dict(conn.execute("SELECT puuid, tier FROM players WHERE tier IS NOT NULL"))
+    tiers = dict(conn.execute("SELECT puuid, tier FROM ladder"))
+    tiers.update(conn.execute("SELECT puuid, tier FROM players WHERE tier IS NOT NULL"))
+    return tiers
 
 
 def pair_elo(source, record, tier_of, a, b, team_tier, gap_table):
