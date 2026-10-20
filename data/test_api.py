@@ -109,6 +109,15 @@ def test_insufficient_data_falls_back_to_self_report(client):
     assert r.status_code == 400
 
 
+def test_deck_returns_the_whole_ranked_pool(client):
+    lookup(client, "Alpha#NA1")
+    top5 = client.post("/api/recommendations", json={"riot_id": "Alpha#NA1"}).json()["partners"]
+    deck = client.post("/api/recommendations", json={"riot_id": "Alpha#NA1", "limit": 200}).json()["partners"]
+    assert len(deck) >= len(top5)
+    assert deck[:len(top5)] == top5
+    assert client.post("/api/recommendations", json={"riot_id": "Alpha#NA1", "limit": 0}).status_code == 422
+
+
 def test_recommendations_top5_duo_eligible(client):
     lookup(client, "Alpha#NA1")
     out = client.get("/api/recommendations/Alpha%23NA1").json()
