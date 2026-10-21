@@ -1,4 +1,5 @@
 """API, lookup cache and 找搭子 against the synthetic FakeRiotClient (no network)."""
+import json
 import os
 import tempfile
 import time
@@ -67,6 +68,23 @@ def test_recent_games_newest_first(client):
     assert times == sorted(times, reverse=True)
     assert set(out["games"][0]) == {"match_id", "game_creation", "game_duration", "champion", "position", "win",
                                     "kills", "deaths", "assists", "cs"}
+
+
+def test_duo_records_count_same_team_games(client):
+    lookup(client, "Alpha#NA1"); lookup(client, "Bravo#NA1")
+    with db.connect(DB) as conn:
+        a = service.cached_row(conn, "Alpha#NA1"); b = service.cached_row(conn, "Bravo#NA1")
+        shared = set(json.loads(a[5])) & set(json.loads(b[5]))
+        together = [m for m in shared if conn.execute(
+            "SELECT COUNT(DISTINCT team_id) FROM participants WHERE match_id=? AND puuid IN (?,?)", (m, a[0], b[0])
+        ).fetchone()[0] == 1]
+    out = client.post("/api/duo-records", json={"pairs": [
+        {"a": "Alpha#NA1", "b": "Bravo#NA1"}, {"a": "Alpha#NA1", "b": "Ghost#NA1"}]}).json()["records"]
+    assert out[0]["games"] == len(together) and 0 <= out[0]["wins"] <= out[0]["games"]
+    assert out[1] is None
+    lookup(client, "DuoA#NA1"); lookup(client, "DuoB#NA1")
+    out = client.post("/api/duo-records", json={"pairs": [{"a": "DuoB#NA1", "b": "duoa#na1"}]}).json()["records"]
+    assert out[0]["games"] == fake_riot.DUO_GAMES and out[0]["wins"] == 7   # fake_riot: they lose every third game
 
 
 def test_cache_key_ignores_case_and_spacing(client):

@@ -33,6 +33,7 @@ fly deploy
 | `DUO_API_URL` | `https://duo-lol-api.fly.dev`（你的 Fly 地址） |
 | `DUO_INTERNAL_SECRET` | 和 Fly 上同一个值 |
 | `ADMIN_ACCOUNTS` | `discord:<你的 Discord 用户 ID>` |
+| `DISCORD_BOT_TOKEN` | 可选，互选通知用。Discord 应用里建一个 Bot，复制它的 Token，再把 Bot 拉进网站的 Discord 服务器；会员要在这个服务器里才能收到私信 |
 | `RIOT_VERIFICATION` | Riot 开发者后台给的验证码，网站会在 `/riot.txt` 返回它 |
 
 **不要**在生产环境设 `AUTH_DEV_LOGIN`。

@@ -17,6 +17,7 @@ export const members = app.table("members", {
   verifiedAt: timestamp("verified_at", { mode: "date" }),
   lastActiveAt: timestamp("last_active_at", { mode: "date" }),
   suspendedAt: timestamp("suspended_at", { mode: "date" }),   // out of every 牌堆 until an admin restores them (§8)
+  seenAt: timestamp("seen_at", { mode: "date" }),             // last opened 找搭子: 互选 and 喜欢 after this count as new
   createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
 });
 
@@ -45,6 +46,7 @@ export const memberPrefs = app.table("member_prefs", {
   positions: text("positions").array().notNull().default([]),          // 想打的位置, at most 2
   recommendOptIn: boolean("recommend_opt_in").notNull().default(false), // 同意被推荐: off until ticked
   showDiscord: boolean("show_discord").notNull().default(false),
+  notifyDiscord: boolean("notify_discord").notNull().default(false),   // 互选通知 by Discord DM, off until ticked
   selfReport: jsonb("self_report").$type<{ tier?: string; picks: { champion: string; position: string }[] }>(),  // 自选英雄 when 数据不足
   // 简介 and the rest of the card's profile (lib/profile.ts); never contact details, those wait for 互选
   bio: text("bio").notNull().default(""),

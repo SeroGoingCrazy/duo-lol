@@ -151,7 +151,11 @@ export function riotIdProblem(id: string): string | null {
 
 
 /** One 卡片 in a 牌堆. id is the 会员 id (or the Riot ID key in the demo); riot_id only after 互选. */
-export type DeckCard = Omit<Partner, "riot_id"> & { id: string; riot_id?: string; discord?: string | null; profile?: MemberProfile };
+/** 一起打的战绩: Solo/Duo games two 会员 played on the same team this season. */
+export type DuoRecord = { games: number; wins: number; last_played: number | null };
+export type DeckCard = Omit<Partner, "riot_id"> & {
+  id: string; riot_id?: string; discord?: string | null; profile?: MemberProfile; duo_record?: DuoRecord | null;
+};
 
 // 会员 牌堆 (PRD-v2 §6.1), served by Next itself rather than the Python API.
 export type Deck = {

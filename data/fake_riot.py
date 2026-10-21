@@ -28,6 +28,10 @@ def _puuid(name, tag):
     return "fake-" + hashlib.sha1(f"{name.lower()}#{tag.lower()}".encode()).hexdigest()[:16]
 
 
+DUO_GAMES = 10
+DUO_PUUIDS = (_puuid("DuoA", "NA1"), _puuid("DuoB", "NA1"))
+
+
 class FakeRiotClient:
     def __init__(self):
         self.names = {}
@@ -69,11 +73,16 @@ class FakeRiotClient:
     def season_match_ids(self, puuid, start_time, limit=100):
         name = self.names.get(puuid, ("", ""))[0]
         n = 8 if name.lower().startswith("new") else 40
-        return [f"FAKE_{puuid}_{i}" for i in range(min(n, limit))]
+        own = [f"FAKE_{puuid}_{i}" for i in range(n)]
+        if puuid in DUO_PUUIDS:   # DuoA#NA1 and DuoB#NA1 queued DUO_GAMES games together, newest first
+            own = [f"FAKE_duo_{i}" for i in range(DUO_GAMES)] + own[DUO_GAMES:]
+        return own[:limit]
 
     def match(self, match_id):
         time.sleep(FETCH_DELAY)
         _, puuid, idx = match_id.rsplit("_", 2)
+        if puuid == "duo":
+            return self._duo_match(match_id, int(idx))
         me = self._player(puuid)
         rng = _rng("match", match_id)
         my_role = me["roles"][0] if rng.random() < 0.7 else me["roles"][1]
@@ -97,6 +106,30 @@ class FakeRiotClient:
                 })
         return {"metadata": {"matchId": match_id},
                 "info": {"queueId": 420, "gameVersion": "15.20", "gameCreation": 1_760_000_000_000 + int(idx),
+                         "gameDuration": 1800, "participants": parts}}
+
+
+
+    def _duo_match(self, match_id, idx):
+        """A game DuoA (mid) and DuoB (support) played on the same team; they win two in three."""
+        rng = _rng("match", match_id)
+        win = idx % 3 != 2
+        duo = {"MIDDLE": DUO_PUUIDS[0], "UTILITY": DUO_PUUIDS[1]}
+        parts = []
+        for team in (100, 200):
+            for pos in POSITIONS:
+                mine = team == 100 and pos in duo
+                puuid = duo[pos] if mine else f"fake-filler-{rng.randrange(300)}"
+                name = ("DuoA" if pos == "MIDDLE" else "DuoB") if mine else f"Filler{rng.randrange(300)}"
+                parts.append({
+                    "puuid": puuid, "riotIdGameName": name, "riotIdTagline": "NA1",
+                    "teamId": team, "win": win if team == 100 else not win, "teamPosition": pos, "championId": 0,
+                    "championName": rng.choice(CHAMPIONS[pos]), "kills": 5, "deaths": 5, "assists": 5,
+                    "goldEarned": 10000, "totalDamageDealtToChampions": 15000, "totalMinionsKilled": 150,
+                    "neutralMinionsKilled": 0, "visionScore": 20,
+                })
+        return {"metadata": {"matchId": match_id},
+                "info": {"queueId": 420, "gameVersion": "15.20", "gameCreation": 1_760_000_100_000 + idx,
                          "gameDuration": 1800, "participants": parts}}
 
 

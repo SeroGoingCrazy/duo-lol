@@ -1,12 +1,13 @@
 // 牌堆, 喜欢 / 跳过, 互选, 拉黑 and 举报 for 会员 (PRD-v2 §3.2-3.4, §6.1, §8). Server only.
 // The site applies the hard filters on its own tables; the Python API scores and ranks what is left (ADR-0006).
-import { and, desc, eq, gte, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, desc, eq, gt, gte, inArray, isNull, or, sql } from "drizzle-orm";
 import { auth } from "@/auth";
 import { getDb, schema } from "@/lib/db";
 import { pythonFetch } from "@/lib/pythonApi";
-import { POSITIONS, riotIdKey, type DeckCard, type Partner, type SelfReport } from "@/lib/api";
+import { POSITIONS, riotIdKey, type DeckCard, type DuoRecord, type Partner, type SelfReport } from "@/lib/api";
 import { SELF_REPORT_TIERS } from "@/lib/labels";
 import { REPORT_REASONS } from "@/lib/reportReasons";
+import { sendDiscordDm } from "@/lib/discordNotify";
 import { cleanFilter, isFiltered, LOOKING_HOURS, passes, type DeckFilter, type MemberProfile } from "@/lib/profile";
 
 export const DAILY_LIKES = 100;        // §8: a cap against liking everyone; it never affects the order
@@ -144,7 +145,11 @@ export async function deck() {
         discord: r.member_prefs.showDiscord ? r.members.name : null };
     })
     .sort((a, b) => +mutual.get(b.id)! - +mutual.get(a.id)!);
+  const records = await duoRecords(me, mutualRows.filter((r) => !hidden.has(r.members.id))
+    .map((r) => ({ id: r.members.id, riotId: r.members.riotId! })));
+  for (const c of mutualCards) c.duo_record = records.get(c.id) ?? null;
   const lastPass = await latestPass(db, me.id);
+  await db.update(members).set({ seenAt: new Date() }).where(eq(members.id, me.id));   // 互选通知 read
   return {
     cards, likes_you: cards.filter((c) => likers.has(c.id)).map((c) => c.id), mutual: mutualCards,
     likes_remaining: DAILY_LIKES - (await likesToday(db, me.id)), can_undo: lastPass !== null,
@@ -213,7 +218,50 @@ export async function swipe(to: string, action: "like" | "pass") {
     return true;
   });
   const match = matched ? await contact(db, to) : null;
+  if (match) void notifyMatch(db, to);   // they may not be on the site right now
   return { mutual_like: match !== null, match, likes_remaining: DAILY_LIKES - (await likesToday(db, me.id)) };
+}
+
+/** 一起打的战绩 for my 互选: Solo/Duo games we played on the same team this season, from the Python cache.
+ *  Missing (Python down, a player never looked up) is null; the 互选 list still shows. */
+async function duoRecords(me: Member, others: { id: string; riotId: string }[]) {
+  const out = new Map<string, DuoRecord | null>();
+  if (others.length === 0) return out;
+  try {
+    const res = await pythonFetch("/api/duo-records", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ pairs: others.map((o) => ({ a: me.riotId, b: o.riotId })) }),
+    });
+    if (!res.ok) return out;
+    const { records } = (await res.json()) as { records: (DuoRecord | null)[] };
+    others.forEach((o, i) => out.set(o.id, records[i] ?? null));
+  } catch { /* shown without records */ }
+  return out;
+}
+
+/** New since I last opened 找搭子: 互选, and 喜欢 from people I haven't swiped. For the nav badge. */
+export async function unseenCount(memberId: string) {
+  const db = await getDb();
+  const [me] = await db.select().from(members).where(eq(members.id, memberId));
+  if (!me?.verifiedAt) return 0;
+  const since = me.seenAt ?? new Date(0);
+  const hidden = await blockedIds(db, me.id);
+  const matches = [...(await activeMutualIds(db, me.id))].filter(([id, at]) => at > since && !hidden.has(id));
+  const swiped = new Set((await db.select({ to: swipes.toMember }).from(swipes).where(eq(swipes.fromMember, me.id))).map((r) => r.to));
+  const likes = (await db.select({ from: swipes.fromMember }).from(swipes)
+    .where(and(eq(swipes.toMember, me.id), eq(swipes.action, "like"), gt(swipes.createdAt, since))))
+    .filter((r) => !swiped.has(r.from) && !hidden.has(r.from));
+  return matches.length + likes.length;
+}
+
+/** Discord DM to the other side of a new 互选, if they ticked 互选通知. No names: the site shows who. */
+async function notifyMatch(db: Db, memberId: string) {
+  const [row] = await db.select({ notify: memberPrefs.notifyDiscord, discordId: authAccounts.providerAccountId })
+    .from(memberPrefs).innerJoin(authAccounts, and(eq(authAccounts.userId, memberPrefs.memberId), eq(authAccounts.provider, "discord")))
+    .where(eq(memberPrefs.memberId, memberId));
+  if (!row?.notify) return;
+  const site = process.env.AUTH_URL ?? process.env.SITE_URL ?? "";
+  await sendDiscordDm(row.discordId, `你有一个新的互选！去看看 TA 的 Riot ID，一起排位吧。You have a new match on LoL Duo Finder.${site ? ` ${site.replace(/\/$/, "")}/find` : ""}`);
 }
 
 /** POST /api/swipes/undo: only the latest swipe, and only if it was a 跳过. */

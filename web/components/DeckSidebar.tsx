@@ -54,6 +54,13 @@ export default function DeckSidebar({ mutual, likes, onOpen, className, disabled
                       </div>
                       {score(p)}
                     </div>
+                    {p.duo_record && (
+                      <div className="mt-2 text-xs text-muted-foreground" data-testid="duo-record">
+                        {p.duo_record.games > 0
+                          ? t("本赛季一起打了 {n} 局，赢 {w} 局", { n: p.duo_record.games, w: p.duo_record.wins })
+                          : t("还没一起打过单双排")}
+                      </div>
+                    )}
                     {actions && <div className="mt-2 flex flex-wrap gap-1 border-t pt-2">{actions(p)}</div>}
                   </li>
                 ))}
