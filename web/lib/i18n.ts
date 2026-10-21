@@ -14,7 +14,7 @@ export function pickLang(cookie: string | undefined, acceptLanguage: string | nu
   return first.startsWith("zh") ? "zh" : "en";
 }
 
-const EN: Record<string, string> = {
+const EN = new Map<string, string>(Object.entries({
   // nav, layout, footer
   "匹配搭子": "Duo Finder",
   "查组合": "Duo check",
@@ -250,7 +250,8 @@ const EN: Record<string, string> = {
   "两个 Riot ID 是同一个玩家，请填两个不同的人": "Both Riot IDs are the same player; enter two different people",
   "两人没有可分配的位置组合": "There's no role split that works for these two",
   "Riot ID 格式应为 名字#标签，例如 Faker#KR1": "A Riot ID looks like name#tag, for example Faker#KR1",
-};
+  "英雄联盟匹配搭子": "LoL Duo Finder",
+}));
 
 /** Python API text with names or numbers in it, and the model's 理由 (data/predict.py). */
 const PATTERNS: [RegExp, string][] = [
@@ -278,32 +279,32 @@ const EN_TIERS: Record<string, string> = {
   DIAMOND: "Diamond", MASTER: "Master", GRANDMASTER: "Grandmaster", CHALLENGER: "Challenger",
 };
 const APEX = new Set(["MASTER", "GRANDMASTER", "CHALLENGER"]);
-// Chinese tier and position names inside Python text, mapped to English
-const ZH_NAMES: [string, string][] = [
+// A captured group that is exactly a tier or position name (Chinese or Riot's code) becomes English;
+// anything else (Riot IDs, champions, numbers) is kept as it is.
+const NAMES = new Map<string, string>([
   ...Object.entries(TIER_LABELS).map(([k, zh]) => [zh, EN_TIERS[k]] as [string, string]),
   ...Object.entries(POSITION_LABELS).map(([k, zh]) => [zh, EN_POSITIONS[k]] as [string, string]),
-];
+  ...Object.entries(EN_POSITIONS),
+]);
 
 function fill(text: string, vars?: Record<string, string | number>) {
-  return vars ? text.replace(/\{(\w+)\}/g, (m, k) => (k in vars ? String(vars[k]) : m)) : text;
+  return vars ? text.replace(/\{(\w+)\}/g, (m, k) => (Object.hasOwn(vars, k) ? String(vars[k]) : m)) : text;
 }
 
 export type T = ReturnType<typeof translator>;
 
 export function translator(lang: Lang) {
-  const t = (zh: string, vars?: Record<string, string | number>) => fill(lang === "en" ? EN[zh] ?? zh : zh, vars);
+  const t = (zh: string, vars?: Record<string, string | number>) => fill(lang === "en" ? EN.get(zh) ?? zh : zh, vars);
   return Object.assign(t, {
     lang,
     /** Text that came back from an API: exact phrases first, then the patterns above. */
     api(text: string) {
       if (lang === "zh" || !text) return text;
-      if (EN[text]) return EN[text];
+      const exact = EN.get(text);
+      if (exact) return exact;
       for (const [re, en] of PATTERNS) {
-        if (re.test(text)) {
-          let out = text.replace(re, en);
-          for (const [zh, e] of ZH_NAMES) out = out.replaceAll(zh, e);
-          return out.replace(/ 个百分点/g, " pts").replace(/(\d) 分\b/g, "$1");
-        }
+        const m = text.match(re);
+        if (m) return en.replace(/\$(\d)/g, (_, i) => NAMES.get(m[+i]) ?? m[+i]);
       }
       return text;
     },

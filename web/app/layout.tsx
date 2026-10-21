@@ -10,7 +10,7 @@ import "./globals.css";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getT();
-  const site = t.lang === "en" ? "LoL Duo Finder" : "英雄联盟匹配搭子";
+  const site = t("英雄联盟匹配搭子");
   return {
     title: { default: `${t("查组合")} · ${site}`, template: `%s · ${site}` },
     description: t("预测两名美服玩家一起打单双排的胜率，并推荐搭子"),

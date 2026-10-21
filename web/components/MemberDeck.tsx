@@ -22,8 +22,8 @@ const RETRY_MAX_S = 600;   // an empty 牌堆 retries with 1.5x backoff up to th
 export default function MemberDeck({ riotId }: { riotId: string }) {
   const info = useChampionInfo();
   const t = useT();
-  const preparing = t("正在从推荐池里准备你的牌堆…");
-  const [loading, setLoading] = useState("");
+  // what is loading, kept as data so the label follows a language switch: the deck, or a Riot ID's lookup
+  const [loading, setLoading] = useState<{ riotId?: string } | null>(null);
   const [error, setError] = useState("");
   const [needPicks, setNeedPicks] = useState<Player | null>(null);
   const [champions, setChampions] = useState<string[]>([]);
@@ -39,7 +39,7 @@ export default function MemberDeck({ riotId }: { riotId: string }) {
   const me = useRef<Player | null>(null);
 
   const load = useCallback(async (quiet = false) => {
-    if (!quiet) setLoading(preparing);
+    if (!quiet) setLoading({});
     try {
       const d = await getDeck();
       setCards(d.cards); setTotal(d.cards.length); setLikers(new Set(d.likes_you)); setMutual(d.mutual);
@@ -54,20 +54,20 @@ export default function MemberDeck({ riotId }: { riotId: string }) {
       if (e instanceof ApiError && e.status === 422 && me.current) setNeedPicks(me.current);
       else setError(e instanceof ApiError ? e.message : String(e));
     } finally {
-      setLoading("");
+      setLoading(null);
     }
-  }, [preparing]);
+  }, []);
 
   useEffect(() => {
     listChampions().then(setChampions).catch(() => setChampions([]));
     (async () => {
       try {
-        setLoading(t("正在读取 {id} 本赛季的单双排对局…", { id: riotId }));
+        setLoading({ riotId });
         me.current = await ensurePlayer(riotId);
         await load();
       } catch (e) {
         setError(e instanceof ApiError ? e.message : String(e));
-        setLoading("");
+        setLoading(null);
       }
     })();
     const b = backoff.current;
@@ -138,7 +138,9 @@ export default function MemberDeck({ riotId }: { riotId: string }) {
       </div>
 
       <div className="space-y-3">
-        {loading && <LookupProgress label={loading} hint={loading !== preparing ? t("第一次查询大约需要 2 分钟，之后会缓存。") : undefined} />}
+        {loading && (loading.riotId
+          ? <LookupProgress label={t("正在读取 {id} 本赛季的单双排对局…", { id: loading.riotId })} hint={t("第一次查询大约需要 2 分钟，之后会缓存。")} />
+          : <LookupProgress label={t("正在从推荐池里准备你的牌堆…")} />)}
         {error && <Alert variant="error">{t.api(error)}</Alert>}
         {needPicks && <SelfReportForm className="max-w-3xl" player={needPicks} champions={champions}
           onSubmit={async (r) => { try { await saveSelfReport(r); await load(); } catch (e) { setError(e instanceof ApiError ? e.message : String(e)); } }} />}
@@ -174,7 +176,7 @@ function ReportDialog({ card, onClose, onSubmit }: {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-labelledby="report-title" data-testid="report-dialog">
       <Card className="w-full max-w-sm space-y-4">
-        <CardTitle id="report-title">{t("举报 {who}", { who: card.riot_id ?? t("这名会员") })}</CardTitle>
+        <CardTitle id="report-title">{t("举报 {who}", { who: card.riot_id || t("这名会员") })}</CardTitle>
         <p className="text-xs text-muted-foreground">{t("举报会同时拉黑对方，管理员会人工处理。对方不会知道是谁举报的。")}</p>
         <fieldset className="space-y-2">
           <legend className="sr-only">{t("理由")}</legend>
