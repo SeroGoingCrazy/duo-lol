@@ -101,18 +101,24 @@ def recommend(conn, source, me, gap_table=None, require_opt_in=False, top_n=TOP_
               exclude=frozenset()):
     """me = service.lookup_player(...) result. Returns the best partners, highest first.
 
-    only: restrict the pool to these players (the site's 会员 who pass its own filters), matched by
-    puuid or by Riot ID key, since a new API key re-encrypts puuids. reports: {puuid: profile} from
+    only: restrict the pool to these players, [(puuid, Riot ID key)] for the site's 会员 who pass its own
+    filters; a puuid this database doesn't hold falls back to the Riot ID, since a new API key re-encrypts puuids. reports: {puuid: profile} from
     自选英雄, used for those players when they are 数据不足. exclude: puuids / Riot ID keys to leave out.
     Unranked candidates are scored and matched like an unranked `me`: their 自选英雄 tier, else UNRANKED_TIER."""
     # Unranked players are scored as UNRANKED_TIER (PRD decision) and matched at its bottom division.
     my_rank = (me["tier"], me["division"], me["league_points"]) if me["tier"] else (me["profile"]["tier"], "IV", 0)
     results = []
-    for puuid, riot_id, rank, ids in candidate_pool(conn, require_opt_in, include_unranked=only is not None):
+    pool = candidate_pool(conn, require_opt_in, include_unranked=only is not None)
+    if only is not None:
+        # a candidate is matched by puuid; by Riot ID only when its puuid is unknown here (an old API key)
+        known = {row[0] for row in pool}
+        by_puuid = {pu for pu, _ in only if pu in known}
+        by_key = {k for pu, k in only if pu not in known}
+    for puuid, riot_id, rank, ids in pool:
         key = riot_id_key(riot_id)
         if puuid in exclude or key in exclude:
             continue
-        if only is not None and puuid not in only and key not in only:
+        if only is not None and puuid not in by_puuid and key not in by_key:
             continue
         reported = (reports or {}).get(puuid) or (reports or {}).get(key)
         if rank[0] is None:

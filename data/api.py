@@ -31,6 +31,7 @@ SCORE_SCALE_PATH = os.environ.get("DUO_SCORE_SCALE", str(Path(__file__).parent /
 MAX_PICKS, MAX_PICK_ROLES = 5, 2   # PRD §2.3: up to 5 自选英雄 in up to 2 positions
 MAX_DECK = 200     # 牌堆 size cap for one request
 MAX_CANDIDATES = 5000   # 会员 the site may send for one 牌堆
+MAX_EXCLUDE = 200_000   # puuids + Riot IDs of every bound 会员, hidden from the public demo
 JOB_KEEP_SECONDS = 600
 TIER_NAMES = {"IRON": "黑铁", "BRONZE": "青铜", "SILVER": "白银", "GOLD": "黄金", "PLATINUM": "铂金",
               "EMERALD": "翡翠", "DIAMOND": "钻石", "MASTER": "大师", "GRANDMASTER": "宗师", "CHALLENGER": "王者"}              # finished lookup jobs are forgotten after this long
@@ -280,7 +281,7 @@ class RecommendRequest(BaseModel):
     limit: int = Field(recommend.TOP_N, ge=1, le=MAX_DECK)   # the 牌堆 asks for the whole ranked pool
     candidates: list[Candidate] | None = Field(None, max_length=MAX_CANDIDATES)   # None = the whole 推荐池
     # puuids / Riot IDs never to return: the site hides its 会员 from the public demo, whose cards show Riot IDs
-    exclude: list[str] = Field(default_factory=list, max_length=MAX_CANDIDATES * 2)
+    exclude: list[str] = Field(default_factory=list, max_length=MAX_EXCLUDE)
 
 
 def candidate_reports(candidates):
@@ -301,7 +302,7 @@ def candidate_reports(candidates):
 
 
 def partner_list(conn, me, profile, limit=recommend.TOP_N, candidates=None, exclude=()):
-    only = None if candidates is None else {k for c in candidates for k in (c.puuid, service.riot_id_key(c.riot_id))}
+    only = None if candidates is None else [(c.puuid, service.riot_id_key(c.riot_id)) for c in candidates]
     found = recommend.recommend(conn, CachedSource(OwnDataSource(conn)), {**me, "profile": profile}, GAP_TABLE,
                                 top_n=limit, only=only, reports=candidate_reports(candidates),
                                 exclude={service.riot_id_key(x) if "#" in x else x for x in exclude})

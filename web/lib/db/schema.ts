@@ -93,9 +93,8 @@ export const verificationChallenges = app.table("verification_challenges", {
 });
 
 /** Riot accounts an admin (or the 3-report rule) paused. Kept after 注销 so re-registering doesn't clear it;
- *  binding the same Riot account again starts paused. Keyed by Riot ID too, since a new API key changes puuids. */
+ *  binding the same Riot account again starts paused. */
 export const riotBans = app.table("riot_bans", {
   puuid: text("puuid").primaryKey(),
-  riotIdKey: text("riot_id_key").notNull(),
   createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
-}, (t) => [index("riot_bans_riot_id_idx").on(t.riotIdKey)]);
+});

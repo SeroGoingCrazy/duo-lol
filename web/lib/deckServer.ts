@@ -67,12 +67,11 @@ async function score(me: Member, report: SelfReport | null | undefined, others: 
   if (res.status === 422 && body.detail?.insufficient_data) throw new DeckError(422, "数据不足，请先选几个常玩英雄", "insufficient_data");
   if (res.status === 409) throw new DeckError(409, "还在读取你的对局，请稍后再试", "not_cached");
   if (!res.ok) throw new DeckError(502, typeof body.detail === "string" ? body.detail : "预测服务暂时不可用");
-  const key = (s: string) => s.trim().toLowerCase();
   const byPuuid = new Map(others.map((o) => [o.member.puuid!, o.member.id]));
-  const byRiotId = new Map(others.map((o) => [key(o.member.riotId!), o.member.id]));
+  const byRiotId = new Map(others.map((o) => [riotIdKey(o.member.riotId!), o.member.id]));
   const out = new Map<string, Partner>();
   for (const p of body.partners as (Partner & { puuid: string })[]) {
-    const id = byPuuid.get(p.puuid) ?? byRiotId.get(key(p.riot_id));
+    const id = byPuuid.get(p.puuid) ?? byRiotId.get(riotIdKey(p.riot_id));
     if (id) out.set(id, p);
   }
   return out;
@@ -108,10 +107,12 @@ export async function deck() {
       .where(inArray(members.id, [...mutual.keys()]))
     : [];
   pool.sort((a, b) => +b.members.lastActiveAt! - +a.members.lastActiveAt!);   // most recently active first if capped
-  const unseen = pool.slice(0, MAX_CANDIDATES).filter((r) => !hidden.has(r.members.id) && !swiped.has(r.members.id) && !mutual.has(r.members.id));
-  const toScore = [...unseen, ...mutualRows.filter((r) => !hidden.has(r.members.id))]
-    .map((r) => ({ member: r.members, report: r.member_prefs.selfReport ?? null }));
-  const scored = await score(me, prefs?.selfReport, toScore);
+  const unseen = pool.filter((r) => !hidden.has(r.members.id) && !swiped.has(r.members.id) && !mutual.has(r.members.id))
+    .slice(0, MAX_CANDIDATES);
+  const asCandidate = (r: (typeof pool)[number]) => ({ member: r.members, report: r.member_prefs.selfReport ?? null });
+  // scored apart, so 互选 never take 牌堆 slots and keep their own score
+  const scored = await score(me, prefs?.selfReport, unseen.map(asCandidate));
+  const scoredMutual = await score(me, prefs?.selfReport, mutualRows.filter((r) => !hidden.has(r.members.id)).map(asCandidate));
 
   const cards: DeckCard[] = [];
   for (const r of unseen) {
@@ -123,7 +124,7 @@ export async function deck() {
   const mutualCards: DeckCard[] = mutualRows
     .filter((r) => !hidden.has(r.members.id))
     .map((r) => {
-      const p = scored.get(r.members.id);
+      const p = scoredMutual.get(r.members.id);
       return { ...(p ? card(r.members.id, p) : unscored(r.members.id)), riot_id: r.members.riotId!,
         discord: r.member_prefs.showDiscord ? r.members.name : null };
     })
@@ -149,6 +150,7 @@ async function latestPass(db: Db, me: string) {
 
 async function contact(db: Db, id: string) {
   const [row] = await db.select().from(members).leftJoin(memberPrefs, eq(memberPrefs.memberId, members.id)).where(eq(members.id, id));
+  if (!row) return null;   // 注销 a moment ago
   return { riot_id: row.members.riotId!, discord: row.member_prefs?.showDiscord ? row.members.name : null };
 }
 
@@ -163,6 +165,8 @@ export async function swipe(to: string, action: "like" | "pass") {
   const [a, b] = pairKey(me.id, to);
   const matched = await db.transaction(async (tx) => {
     // both 喜欢 at the same instant: the pair lock makes the second one see the first and create the 互选
+    // and my own lock makes parallel 喜欢 to different people respect the daily cap
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${me.id}))`);
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${a + "|" + b}))`);
     if (action === "like" && (await likesToday(tx as unknown as Db, me.id)) >= DAILY_LIKES) {
       throw new DeckError(429, `今天的 ${DAILY_LIKES} 次喜欢已经用完，明天再来`, "likes_exhausted");
@@ -178,7 +182,7 @@ export async function swipe(to: string, action: "like" | "pass") {
     return true;
   });
   const match = matched ? await contact(db, to) : null;
-  return { mutual_like: matched, match, likes_remaining: DAILY_LIKES - (await likesToday(db, me.id)) };
+  return { mutual_like: match !== null, match, likes_remaining: DAILY_LIKES - (await likesToday(db, me.id)) };
 }
 
 /** POST /api/swipes/undo: only the latest swipe, and only if it was a 跳过. */
@@ -196,7 +200,10 @@ export async function mutualLikesOf() {
   const hidden = await blockedIds(db, me.id);
   const mutual = await activeMutualIds(db, me.id);
   const out = [];
-  for (const [id, at] of mutual) if (!hidden.has(id)) out.push({ id, ...(await contact(db, id)), created_at: at });
+  for (const [id, at] of mutual) {
+    const c = hidden.has(id) ? null : await contact(db, id);
+    if (c) out.push({ id, ...c, created_at: at });
+  }
   return out.sort((a, b) => +b.created_at - +a.created_at);
 }
 
@@ -234,20 +241,18 @@ export async function block(to: string) {
 /** Out of every 牌堆, and remembered by Riot account so 注销 and re-registering doesn't undo it. */
 export async function pause(db: Db, target: Member) {
   await db.update(members).set({ suspendedAt: new Date() }).where(and(eq(members.id, target.id), isNull(members.suspendedAt)));
-  if (target.puuid && target.riotId) {
-    await db.insert(riotBans).values({ puuid: target.puuid, riotIdKey: riotIdKey(target.riotId) }).onConflictDoNothing();
-  }
+  if (target.puuid) await db.insert(riotBans).values({ puuid: target.puuid }).onConflictDoNothing();
 }
 
 export async function unpause(db: Db, target: Member) {
   await db.update(members).set({ suspendedAt: null }).where(eq(members.id, target.id));
   if (target.puuid) await db.delete(riotBans).where(eq(riotBans.puuid, target.puuid));
-  if (target.riotId) await db.delete(riotBans).where(eq(riotBans.riotIdKey, riotIdKey(target.riotId)));
 }
 
-/** Is this Riot account paused from an earlier membership? Checked when it is bound again. */
-export async function isBanned(db: Db, puuid: string, riotId: string) {
-  const rows = await db.select().from(riotBans).where(or(eq(riotBans.puuid, puuid), eq(riotBans.riotIdKey, riotIdKey(riotId))));
+/** Is this Riot account paused from an earlier membership? Checked when it is bound again. By puuid only:
+ *  a Riot ID can be renamed and taken by someone else. */
+export async function isBanned(db: Db, puuid: string) {
+  const rows = await db.select().from(riotBans).where(eq(riotBans.puuid, puuid));
   return rows.length > 0;
 }
 

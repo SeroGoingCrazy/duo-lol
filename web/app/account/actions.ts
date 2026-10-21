@@ -77,7 +77,7 @@ export async function checkVerification(_: ActionState): Promise<ActionState> {
   if (await boundElsewhere(account.puuid, me)) return { error: "这个 Riot 账号已经绑定了别的会员" };
 
   // a Riot account paused under an earlier membership stays paused (PRD-v2 §8)
-  const banned = await isBanned(db, account.puuid, account.riot_id);
+  const banned = await isBanned(db, account.puuid);
   await db.update(schema.members)
     .set({ puuid: account.puuid, riotId: account.riot_id, verifiedAt: new Date(), ...(banned ? { suspendedAt: new Date() } : {}) })
     .where(eq(schema.members.id, me));

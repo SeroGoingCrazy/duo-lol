@@ -143,7 +143,7 @@ export default function MemberDeck({ riotId }: { riotId: string }) {
 
       {cards && (
         <DeckStage remaining={cards} total={total} mutual={mutual} likes={cards.filter((c) => likers.has(c.id))} info={info}
-          canUndo={canUndo} onSwipe={onSwipe} onUndo={onUndo} cardActions={safety}
+          canUndo={canUndo} onSwipe={onSwipe} onUndo={onUndo} cardActions={safety} paused={!!reporting}
           mutualActions={(c) => <>
             <Button variant="ghost" className={small} onClick={() => act(() => cancelMutualLike(c.id), c.id)}>取消互选</Button>
             {safety(c)}

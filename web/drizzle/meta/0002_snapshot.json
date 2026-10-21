@@ -1,5 +1,5 @@
 {
-  "id": "646335e2-77a3-4f64-8c8a-34a43cd5c154",
+  "id": "5d73bb4e-5f67-4bc4-8954-faf47093f703",
   "prevId": "f47453da-9e32-4129-9ed2-81ebf49bf2be",
   "version": "7",
   "dialect": "postgresql",
@@ -564,12 +564,6 @@
           "primaryKey": true,
           "notNull": true
         },
-        "riot_id_key": {
-          "name": "riot_id_key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp",
@@ -578,23 +572,7 @@
           "default": "now()"
         }
       },
-      "indexes": {
-        "riot_bans_riot_id_idx": {
-          "name": "riot_bans_riot_id_idx",
-          "columns": [
-            {
-              "expression": "riot_id_key",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
+      "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},

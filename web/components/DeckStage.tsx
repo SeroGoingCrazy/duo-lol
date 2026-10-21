@@ -13,7 +13,7 @@ import { tierLabel } from "@/lib/labels";
 
 /** The 牌堆 on screen, shared by the demo (ADR-0008) and the 会员 deck: card, buttons, keys, sidebar, 互选 dialog.
  *  The parent owns the data; onSwipe resolves to the 互选 card (with Riot ID) when a 喜欢 made one. */
-export default function DeckStage({ remaining, total, mutual, likes, info, canUndo, onSwipe, onUndo, empty, cardActions, mutualActions }: {
+export default function DeckStage({ remaining, total, mutual, likes, info, canUndo, onSwipe, onUndo, empty, cardActions, mutualActions, paused = false }: {
   remaining: DeckCard[];
   total: number;
   mutual: DeckCard[];
@@ -25,6 +25,7 @@ export default function DeckStage({ remaining, total, mutual, likes, info, canUn
   empty: React.ReactNode;
   cardActions?: (c: DeckCard) => React.ReactNode;     // 拉黑 / 举报 under the buttons
   mutualActions?: (c: DeckCard) => React.ReactNode;   // 取消互选 / 拉黑 / 举报 in the 互选 list
+  paused?: boolean;                                    // a dialog of the parent's is open: arrow keys do nothing
 }) {
   const [focus, setFocus] = useState<string | null>(null);   // a card opened from 喜欢我的人 or brought back by 撤销
   const [fling, setFling] = useState<Swipe | null>(null);
@@ -51,7 +52,7 @@ export default function DeckStage({ remaining, total, mutual, likes, info, canUn
   // ← 跳过, → 喜欢, as on Tinder's web app; not while typing in a field
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (!top || fling || matched || e.repeat || e.altKey || e.ctrlKey || e.metaKey || (e.target as HTMLElement).closest("input, textarea, select, button, a, [contenteditable], [role=combobox], [role=tab], [role=dialog]")) return;
+      if (!top || fling || matched || paused || e.repeat || e.altKey || e.ctrlKey || e.metaKey || (e.target as HTMLElement).closest("input, textarea, select, button, a, [contenteditable], [role=combobox], [role=tab], [role=dialog]")) return;
       if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
         e.preventDefault();
         setFling(e.key === "ArrowLeft" ? "pass" : "like");
@@ -59,7 +60,7 @@ export default function DeckStage({ remaining, total, mutual, likes, info, canUn
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [top, fling, matched]);
+  }, [top, fling, matched, paused]);
 
   return (
     <>
