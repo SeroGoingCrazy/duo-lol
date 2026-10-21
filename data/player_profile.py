@@ -20,18 +20,27 @@ def season_match_ids(client, puuid, limit=MAX_GAMES, season_start=SEASON_START):
 
 def fetch_profile(conn, client, puuid, season_start=SEASON_START, on_progress=None):
     ids = season_match_ids(client, puuid, season_start=season_start)
-    store_matches(conn, client, ids, on_progress)
+    store_matches(conn, client, ids, on_progress, puuid=puuid)
     return proficiency(conn, puuid, ids)
 
 
-def store_matches(conn, client, match_ids, on_progress=None):
-    """Fetch and store the matches not cached yet; on_progress(done, total) after each."""
+def store_matches(conn, client, match_ids, on_progress=None, puuid=None):
+    """Fetch and store the matches not cached yet; on_progress(done, total) after each.
+
+    PUUIDs are encrypted per API key, so after a key change a cached match can list this player
+    under an old PUUID. Such a match is fetched again and its participants re-keyed to the new
+    PUUIDs, so proficiency() finds the player without storing the match twice."""
     for i, mid in enumerate(match_ids, 1):
         if not db.has_match(conn, mid):
             match = client.match(mid)
             if match:
                 db.save_match(conn, match, seed_tier=None)
                 conn.commit()   # short write transactions so parallel lookups don't block
+        elif puuid and not db.has_participant(conn, mid, puuid):
+            match = client.match(mid)
+            if match:
+                db.rekey_participants(conn, match)
+                conn.commit()
         if on_progress:
             on_progress(i, len(match_ids))
 

@@ -62,6 +62,25 @@ def save_player(conn, entry, now):
     )
 
 
+def has_participant(conn, match_id, puuid):
+    return conn.execute("SELECT 1 FROM participants WHERE match_id=? AND puuid=?",
+                        (match_id, puuid)).fetchone() is not None
+
+
+def rekey_participants(conn, match):
+    """Replace a cached match's PUUIDs with the ones this API key sees. A champion appears once
+    per game, so (match_id, champion_name) finds the same participant under either key."""
+    mid = match["metadata"]["matchId"]
+    for p in match["info"]["participants"]:
+        conn.execute("UPDATE participants SET puuid=? WHERE match_id=? AND champion_name=?",
+                     (p["puuid"], mid, p["championName"]))
+        if p.get("riotIdGameName"):
+            conn.execute(
+                "INSERT INTO players (puuid, riot_id) VALUES (?, ?) ON CONFLICT(puuid) DO UPDATE SET riot_id=excluded.riot_id",
+                (p["puuid"], f'{p["riotIdGameName"]}#{p.get("riotIdTagline", "")}'),
+            )
+
+
 def save_match(conn, match, seed_tier):
     info = match["info"]
     if info.get("queueId") != 420:

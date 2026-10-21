@@ -80,7 +80,7 @@ def lookup_player(conn, client, riot_id, on_progress=None):
     canonical = f'{account["gameName"]}#{account["tagLine"]}'
     entry = client.solo_entry(puuid)
     ids = player_profile.season_match_ids(client, puuid)
-    player_profile.store_matches(conn, client, ids, on_progress)
+    player_profile.store_matches(conn, client, ids, on_progress, puuid=puuid)
     tier, division, lp = (entry["tier"], entry["rank"], entry["leaguePoints"]) if entry else (None, None, None)
     conn.execute(
         """INSERT INTO player_cache
