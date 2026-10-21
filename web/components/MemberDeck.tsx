@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Sparkles } from "lucide-react";
+import DeckFilters from "@/components/DeckFilters";
 import DeckStage from "@/components/DeckStage";
 import LookupProgress from "@/components/LookupProgress";
 import SelfReportForm from "@/components/SelfReportForm";
@@ -9,8 +10,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
 import {
   ApiError, blockMember, cancelMutualLike, ensurePlayer, getDeck, listChampions, postSwipe, reportMember, saveSelfReport,
-  undoSwipe, type DeckCard, type Player,
+  saveDeckFilter, setLooking, undoSwipe, type DeckCard, type Player,
 } from "@/lib/api";
+import { isFiltered, LOOKING_HOURS, type DeckFilter } from "@/lib/profile";
 import type { Swipe } from "@/lib/deck";
 import { REPORT_REASONS } from "@/lib/reportReasons";
 import { useChampionInfo } from "@/lib/useChampionInfo";
@@ -34,16 +36,22 @@ export default function MemberDeck({ riotId }: { riotId: string }) {
   const [likesLeft, setLikesLeft] = useState<number | null>(null);
   const [canUndo, setCanUndo] = useState(false);
   const [reporting, setReporting] = useState<DeckCard | null>(null);
+  const [filter, setFilter] = useState<DeckFilter | null>(null);
+  const [lookingUntil, setLookingUntil] = useState<Date | null>(null);
   const swiped = useRef(new Map<string, DeckCard>());   // so 撤销 can put the card back without a reload
   const backoff = useRef<{ wait: number; timer: ReturnType<typeof setTimeout> | null }>({ wait: 0, timer: null });
   const me = useRef<Player | null>(null);
+  const latest = useRef(0);   // filter changes can overlap: only the newest deck request may land
 
   const load = useCallback(async (quiet = false) => {
     if (!quiet) setLoading({});
+    const seq = ++latest.current;
     try {
       const d = await getDeck();
+      if (seq !== latest.current) return;
       setCards(d.cards); setTotal(d.cards.length); setLikers(new Set(d.likes_you)); setMutual(d.mutual);
       setLikesLeft(d.likes_remaining); setCanUndo(d.can_undo); setNeedPicks(null); setError("");
+      setFilter(d.filter); setLookingUntil(d.looking_until ? new Date(d.looking_until) : null);
       const b = backoff.current;
       if (b.timer) clearTimeout(b.timer);
       if (d.cards.length === 0 && d.retry_after) {
@@ -51,10 +59,11 @@ export default function MemberDeck({ riotId }: { riotId: string }) {
         b.timer = setTimeout(() => load(true), b.wait * 1000);
       } else b.wait = 0;
     } catch (e) {
+      if (seq !== latest.current) return;
       if (e instanceof ApiError && e.status === 422 && me.current) setNeedPicks(me.current);
       else setError(e instanceof ApiError ? e.message : String(e));
     } finally {
-      setLoading(null);
+      if (seq === latest.current) setLoading(null);
     }
   }, []);
 
@@ -114,6 +123,19 @@ export default function MemberDeck({ riotId }: { riotId: string }) {
     }
   }
 
+  async function changeFilter(f: DeckFilter) {
+    setFilter(f);
+    try { await saveDeckFilter(f); await load(); } catch (e) { setError(e instanceof ApiError ? e.message : String(e)); }
+  }
+
+  const looking = !!lookingUntil && lookingUntil > new Date();
+  async function toggleLooking() {
+    try {
+      const r = await setLooking(!looking);
+      setLookingUntil(r.looking_until ? new Date(r.looking_until) : null);
+    } catch (e) { setError(e instanceof ApiError ? e.message : String(e)); }
+  }
+
   async function act(fn: () => Promise<unknown>, id: string) {
     try { await fn(); remove(id); } catch (e) { setError(e instanceof ApiError ? e.message : String(e)); }
   }
@@ -132,15 +154,25 @@ export default function MemberDeck({ riotId }: { riotId: string }) {
           <h1 className="text-3xl font-bold tracking-tight">{t("找搭子")}</h1>
           <p className="mt-2 hidden text-sm text-muted-foreground sm:block">{t("推荐池里都是同意被推荐的会员。右滑喜欢，左滑跳过，互相喜欢后才能看到对方的 Riot ID。")}</p>
         </div>
-        <span className="rounded-full border bg-card px-3 py-1.5 text-xs text-muted-foreground" data-testid="deck-owner">
-          {riotId}{likesLeft != null && <><span className="mx-1 text-border">/</span>{t("今天还能喜欢 {n} 次", { n: likesLeft })}</>}
-        </span>
+        <div className="flex flex-wrap items-center gap-2">
+          {filter && (
+            <Button variant={looking ? "default" : "outline"} className={looking ? "h-8 gap-2 rounded-full bg-good px-3 text-xs text-white hover:bg-good/90" : "h-8 gap-2 rounded-full px-3 text-xs"}
+              aria-pressed={looking} onClick={toggleLooking} data-testid="looking-toggle"
+              title={looking ? t("{time} 前显示为现在想打，再点一下关掉", { time: lookingUntil!.toLocaleTimeString(t.lang === "en" ? "en-US" : "zh-CN", { hour: "numeric", minute: "2-digit" }) }) : t("别人会在卡片上看到你现在想打，{h} 小时后自动关掉", { h: LOOKING_HOURS })}>
+              <span className={looking ? "size-2 rounded-full bg-white" : "size-2 rounded-full bg-muted-foreground/50"} />{t("现在想打")}
+            </Button>
+          )}
+          <span className="rounded-full border bg-card px-3 py-1.5 text-xs text-muted-foreground" data-testid="deck-owner">
+            {riotId}{likesLeft != null && <><span className="mx-1 text-border">/</span>{t("今天还能喜欢 {n} 次", { n: likesLeft })}</>}
+          </span>
+        </div>
       </div>
 
       <div className="space-y-3">
         {loading && (loading.riotId
           ? <LookupProgress label={t("正在读取 {id} 本赛季的单双排对局…", { id: loading.riotId })} hint={t("第一次查询大约需要 2 分钟，之后会缓存。")} />
           : <LookupProgress label={t("正在从推荐池里准备你的牌堆…")} />)}
+        {filter && <DeckFilters filter={filter} onChange={changeFilter} />}
         {error && <Alert variant="error">{t.api(error)}</Alert>}
         {needPicks && <SelfReportForm className="max-w-3xl" player={needPicks} champions={champions}
           onSubmit={async (r) => { try { await saveSelfReport(r); await load(); } catch (e) { setError(e instanceof ApiError ? e.message : String(e)); } }} />}
@@ -156,6 +188,7 @@ export default function MemberDeck({ riotId }: { riotId: string }) {
           empty={<>
             <p className="font-semibold">{t("暂时没有更多搭子了")}</p>
             <p className="text-sm text-muted-foreground">{t("有新会员加入时会自动出现新的卡片。也可以去查组合，直接算你和某个人的分数。")}</p>
+            {filter && isFiltered(filter) && <p className="text-sm text-muted-foreground">{t("你开了筛选，放宽一些会看到更多人。")}</p>}
             <Button variant="outline" asChild><a href="/">{t("去查组合")}</a></Button>
           </>} />
       )}

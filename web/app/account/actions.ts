@@ -10,6 +10,7 @@ import { isBanned } from "@/lib/deckServer";
 import { riotAccount, RiotAccountError, warmPlayer } from "@/lib/riotAccount";
 import { riotIdProblem } from "@/lib/api";
 import { POSITIONS } from "@/lib/labels";
+import { bioProblem, LANGUAGES, PLAY_TIMES, VOICES, type Voice } from "@/lib/profile";
 
 // Summoner icons 0-28 are the starter icons every League account owns, so anyone can switch to one.
 const STARTER_ICONS = 29;
@@ -99,8 +100,18 @@ export async function savePrefs(_: ActionState, form: FormData): Promise<ActionS
   const me = await memberId();
   const positions = form.getAll("positions").map(String).filter((p) => POSITIONS.includes(p));
   if (positions.length > MAX_POSITIONS) return { error: `想打的位置最多选 ${MAX_POSITIONS} 个` };
+  const bio = String(form.get("bio") ?? "").replace(/\s+/g, " ").trim();
+  const problem = bioProblem(bio);
+  if (problem) return { error: problem };
+  const among = <T extends string>(name: string, allowed: readonly T[]) =>
+    [...new Set(form.getAll(name).map(String))].filter((x): x is T => (allowed as readonly string[]).includes(x));
+  const voice = String(form.get("voice") ?? "");
   const prefs = {
     positions,
+    bio,
+    languages: among("languages", LANGUAGES),
+    voice: (VOICES as readonly string[]).includes(voice) ? (voice as Voice) : null,
+    playTimes: among("play_times", PLAY_TIMES),
     recommendOptIn: form.get("recommend_opt_in") === "on",
     showDiscord: form.get("show_discord") === "on",
   };

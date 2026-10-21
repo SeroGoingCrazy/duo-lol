@@ -1,42 +1,8 @@
-import { expect, test, type Browser, type Page } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 // 滑卡 between real 会员 (PRD-v2 §3.2-3.4, §11): 喜欢我的人, 互选 reveals the Riot ID, 撤销, 举报 and 管理.
 // Alice, Dave and Ivan are all 铂金 in data/fake_riot.py, so they can duo with each other.
-const API = "http://127.0.0.1:8100";
-
-async function member(browser: Browser, name: string, riotId?: string, optIn = true): Promise<Page> {
-  const page = await (await browser.newContext()).newPage();
-  await page.goto("/login");
-  await page.getByLabel("测试账号名").fill(name);
-  await page.getByRole("button", { name: "以测试账号登录" }).click();
-  await expect(page).toHaveURL(/\/account$/);
-  if (!riotId) return page;
-  await page.getByLabel("你的 Riot ID").fill(riotId);
-  await page.getByRole("button", { name: "下一步" }).click();
-  const icon = Number((await page.getByTestId("challenge-icon").innerText()).replace("#", ""));
-  await page.request.post(`${API}/api/fake/icon`, { data: { riot_id: riotId, icon } });
-  await page.getByRole("button", { name: "验证" }).click();
-  await expect(page.getByTestId("bound-riot-id")).toHaveText(riotId);
-  if (optIn) await setOptIn(page, true);
-  await cached(page, riotId);
-  return page;
-}
-
-/** Binding starts fetching the 会员's games; only cached players can be scored into a 牌堆. */
-async function cached(page: Page, riotId: string) {
-  await expect.poll(async () => {
-    const r = await page.request.post(`${API}/api/lookups`, { data: { riot_id: riotId } });
-    return (await r.json()).player?.riot_id ?? null;
-  }, { timeout: 30_000 }).toBe(riotId);
-}
-
-async function setOptIn(page: Page, on: boolean) {
-  await page.goto("/account");
-  const prefs = page.getByTestId("prefs");
-  await prefs.getByLabel(/同意被推荐/).setChecked(on);
-  await prefs.getByRole("button", { name: "保存" }).click();
-  await expect(prefs.getByText("已保存")).toBeVisible();
-}
+import { member, setOptIn } from "./members";
 
 const remaining = (page: Page) => page.getByText(/剩余 \d+ \/ \d+/);
 

@@ -8,7 +8,9 @@ import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
+import ChoiceChip from "@/components/ChoiceChip";
 import { POSITIONS } from "@/lib/labels";
+import { BIO_MAX, LANGUAGE_LABELS, LANGUAGES, PLAY_TIME_LABELS, PLAY_TIMES } from "@/lib/profile";
 import { cn } from "@/lib/utils";
 import { useT } from "@/components/LangProvider";
 
@@ -80,16 +82,28 @@ export function BindRiotCard({ riotId, pending }: {
 }
 
 /** 偏好: 想打的位置 (up to 2), 同意被推荐 (off by default) and whether 互选 shows the Discord name. */
+export type PrefsValues = {
+  positions: string[]; recommendOptIn: boolean; showDiscord: boolean;
+  bio: string; languages: string[]; voice: string | null; playTimes: string[];
+};
+
 export function PrefsCard({ verified, prefs, discordName }: {
   verified: boolean;
-  prefs: { positions: string[]; recommendOptIn: boolean; showDiscord: boolean };
+  prefs: PrefsValues;
   discordName: string;
 }) {
   const [positions, setPositions] = useState(prefs.positions);
+  const [languages, setLanguages] = useState(prefs.languages);
+  const [voice, setVoice] = useState(prefs.voice ?? "");
+  const [playTimes, setPlayTimes] = useState(prefs.playTimes);
+  const [bio, setBio] = useState(prefs.bio);
   const t = useT();
   const [state, save, saving] = useActionState(savePrefs, NONE);
   const toggle = (p: string) =>
     setPositions((cur) => (cur.includes(p) ? cur.filter((x) => x !== p) : cur.length < 2 ? [...cur, p] : cur));
+  const flip = (set: React.Dispatch<React.SetStateAction<string[]>>, x: string) =>
+    set((cur) => (cur.includes(x) ? cur.filter((y) => y !== x) : [...cur, x]));
+  const legend = "mb-2 text-xs font-medium text-muted-foreground";
 
   return (
     <Card data-testid="prefs">
@@ -99,20 +113,48 @@ export function PrefsCard({ verified, prefs, discordName }: {
       ) : (
         <form action={save} className="space-y-4">
           <fieldset>
-            <legend className="mb-2 text-xs font-medium text-muted-foreground">{t("想打的位置（最多 2 个）")}</legend>
+            <legend className={legend}>{t("想打的位置（最多 2 个）")}</legend>
             <div className="flex flex-wrap gap-2">
               {POSITIONS.map((p) => {
                 const on = positions.includes(p);
                 return (
-                  <label key={p} className={cn("flex cursor-pointer items-center gap-2 rounded-md border px-3 py-1.5 text-sm transition-colors",
-                    on ? "bg-accent font-semibold" : "text-muted-foreground hover:text-foreground",
-                    !on && positions.length >= 2 && "cursor-not-allowed opacity-50")}>
-                    <input type="checkbox" name="positions" value={p} checked={on} onChange={() => toggle(p)}
-                      disabled={!on && positions.length >= 2} className="sr-only" />
+                  <ChoiceChip key={p} name="positions" value={p} checked={on} onChange={() => toggle(p)} disabled={!on && positions.length >= 2}>
                     <PositionIcon position={p} size={18} showLabel />
-                  </label>
+                  </ChoiceChip>
                 );
               })}
+            </div>
+          </fieldset>
+          <label className="block">
+            <span className={cn(legend, "flex justify-between")}><span>{t("简介（会显示在卡片上）")}</span><span className="tabular-nums">{bio.length} / {BIO_MAX}</span></span>
+            <textarea name="bio" rows={2} maxLength={BIO_MAX} value={bio} onChange={(e) => setBio(e.target.value)}
+              placeholder={t("例如：晚上打，主玩辅助，想找稳一点的 ADC")} className="w-full rounded-md border bg-background p-2 text-sm" />
+            <span className="block text-xs text-muted-foreground">{t("不要写联系方式，互选后对方才看得到你的 Riot ID。")}</span>
+          </label>
+          <fieldset>
+            <legend className={legend}>{t("语言")}</legend>
+            <div className="flex flex-wrap gap-2">
+              {LANGUAGES.map((l) => (
+                <ChoiceChip key={l} name="languages" value={l} checked={languages.includes(l)} onChange={() => flip(setLanguages, l)}>
+                  <span lang={l}>{LANGUAGE_LABELS[l]}</span>
+                </ChoiceChip>
+              ))}
+            </div>
+          </fieldset>
+          <fieldset>
+            <legend className={legend}>{t("语音")}</legend>
+            <div className="flex flex-wrap gap-2">
+              {([["voice", "开麦"], ["text", "只打字"], ["", "不说"]] as const).map(([v, label]) => (
+                <ChoiceChip key={v || "none"} type="radio" name="voice" value={v} checked={voice === v} onChange={() => setVoice(v)}>{t(label)}</ChoiceChip>
+              ))}
+            </div>
+          </fieldset>
+          <fieldset>
+            <legend className={legend}>{t("常玩时间（你的当地时间）")}</legend>
+            <div className="flex flex-wrap gap-2">
+              {PLAY_TIMES.map((p) => (
+                <ChoiceChip key={p} name="play_times" value={p} checked={playTimes.includes(p)} onChange={() => flip(setPlayTimes, p)}>{t(PLAY_TIME_LABELS[p])}</ChoiceChip>
+              ))}
             </div>
           </fieldset>
           <label className="flex items-start gap-2 text-sm">
