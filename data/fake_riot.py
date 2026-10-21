@@ -33,7 +33,7 @@ DUO_PUUIDS = (_puuid("DuoA", "NA1"), _puuid("DuoB", "NA1"))
 
 
 class FakeRiotClient:
-    def __init__(self):
+    def __init__(self, **_):   # accepts RiotClient's limiter= and ignores it
         self.names = {}
         self.icons = {}   # puuid -> icon set through set_icon, as if changed in the client
 

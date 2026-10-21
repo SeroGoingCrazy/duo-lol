@@ -35,6 +35,31 @@ CREATE TABLE IF NOT EXISTS player_cache (   -- 查过的玩家 (PRD §4 缓存)
     fetched_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_cache_riot_id ON player_cache(riot_id_key);
+CREATE TABLE IF NOT EXISTS ladder (         -- 天梯快照: every NA Solo/Duo entry, so teammates have a tier (段位差)
+    puuid TEXT PRIMARY KEY,
+    tier TEXT, division TEXT, league_points INTEGER,
+    wins INTEGER, losses INTEGER,
+    fetched_at INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_ladder_tier ON ladder(tier);
+CREATE TABLE IF NOT EXISTS ladder_progress (  -- resume point of the ladder crawl
+    tier TEXT, division TEXT, last_page INTEGER NOT NULL DEFAULT 0, done INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (tier, division)
+);
+CREATE TABLE IF NOT EXISTS key_epoch (        -- PUUIDs are encrypted per API key; a key that sees new ones starts an epoch
+    id INTEGER PRIMARY KEY,
+    probes TEXT NOT NULL,                     -- JSON [[riot_id, puuid], ...] as this key sees them
+    matches_before INTEGER NOT NULL,          -- matches with rowid <= this still carry the previous key's PUUIDs
+    started_at INTEGER NOT NULL,
+    done INTEGER NOT NULL DEFAULT 0           -- 1 once those matches are re-keyed
+);
+CREATE TABLE IF NOT EXISTS rekeyed (          -- matches whose participants were moved to the epoch's PUUIDs
+    match_id TEXT PRIMARY KEY, epoch INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS seed_progress (    -- seed players whose recent games are already stored
+    puuid TEXT PRIMARY KEY,
+    matches_per_player INTEGER NOT NULL       -- how many recent games were requested
+);
 """
 
 
@@ -59,6 +84,17 @@ def save_player(conn, entry, now):
              sampled_at=excluded.sampled_at""",
         (entry["puuid"], entry["tier"], entry["rank"], entry["leaguePoints"],
          entry["wins"], entry["losses"], now),
+    )
+
+
+def save_ladder(conn, entries, now):
+    conn.executemany(
+        """INSERT INTO ladder VALUES (?,?,?,?,?,?,?)
+           ON CONFLICT(puuid) DO UPDATE SET tier=excluded.tier, division=excluded.division,
+             league_points=excluded.league_points, wins=excluded.wins, losses=excluded.losses,
+             fetched_at=excluded.fetched_at""",
+        [(e["puuid"], e["tier"], e["rank"], e["leaguePoints"], e["wins"], e["losses"], now)
+         for e in entries if e.get("puuid")],
     )
 
 

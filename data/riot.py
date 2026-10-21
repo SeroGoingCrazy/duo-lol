@@ -9,14 +9,19 @@ from urllib.parse import quote
 import requests
 from dotenv import load_dotenv
 
-# Repo-root .env; a RIOT_API_KEY already set in the environment wins.
-load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+# Repo-root .env (or the file DUO_ENV names); a RIOT_API_KEY already set in the environment wins.
+load_dotenv(os.environ.get("DUO_ENV") or Path(__file__).resolve().parent.parent / ".env")
 
 PLATFORM = "https://na1.api.riotgames.com"   # NA league / mastery endpoints
 REGION = "https://americas.api.riotgames.com"  # match-v5 for NA
 
 SOLO_QUEUE = "RANKED_SOLO_5x5"
 SOLO_QUEUE_ID = 420
+APEX_TIERS = {"MASTER": "masterleagues", "GRANDMASTER": "grandmasterleagues", "CHALLENGER": "challengerleagues"}
+
+
+class KeyRejected(RuntimeError):
+    """401/403: the key is wrong or expired (dev keys last 24h). Retrying will not help."""
 
 
 class RateLimiter:
@@ -58,9 +63,13 @@ class RiotClient:
         self.limiter = limiter or RateLimiter()
 
     def get(self, url, params=None, retries=5):
-        for _ in range(retries):
+        for attempt in range(1, retries + 1):
             self.limiter.wait()
-            resp = self.session.get(url, params=params, headers={"X-Riot-Token": self.api_key}, timeout=15)
+            try:
+                resp = self.session.get(url, params=params, headers={"X-Riot-Token": self.api_key}, timeout=15)
+            except (requests.ConnectionError, requests.Timeout):
+                time.sleep(5 * attempt)   # network blip; back off and retry
+                continue
             if resp.status_code == 429:
                 time.sleep(int(resp.headers.get("Retry-After", "10")))
                 continue
@@ -69,12 +78,20 @@ class RiotClient:
                 continue
             if resp.status_code == 404:
                 return None
+            if resp.status_code in (401, 403):
+                raise KeyRejected(f"Riot rejected RIOT_API_KEY ({resp.status_code}); regenerate it at "
+                                  "https://developer.riotgames.com and update .env")
             resp.raise_for_status()
             return resp.json()
         raise RuntimeError(f"Gave up on {url}")
 
     def league_entries(self, tier, division, page=1):
         return self.get(f"{PLATFORM}/lol/league/v4/entries/{SOLO_QUEUE}/{tier}/{division}", {"page": page}) or []
+
+    def apex_entries(self, tier):
+        """Every Solo/Duo entry in MASTER/GRANDMASTER/CHALLENGER, shaped like league_entries rows."""
+        league = self.get(f"{PLATFORM}/lol/league/v4/{APEX_TIERS[tier]}/by-queue/{SOLO_QUEUE}") or {}
+        return [{**e, "tier": tier} for e in league.get("entries", [])]
 
     def match_ids(self, puuid, count=20, start=0, start_time=None):
         params = {"queue": SOLO_QUEUE_ID, "type": "ranked", "start": start, "count": count}

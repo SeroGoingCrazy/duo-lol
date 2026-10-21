@@ -44,7 +44,7 @@ class FakeClient:
 def test_end_to_end(monkeypatch=None):
     path = os.path.join(tempfile.mkdtemp(), "t.sqlite")
     fake = FakeClient()
-    collect.RiotClient = lambda: fake
+    collect.make_client = lambda: fake
 
     class A:
         db = path; tiers = ["GOLD", "DIAMOND"]; players_per_tier = 4
@@ -61,6 +61,79 @@ def test_end_to_end(monkeypatch=None):
         ON a.match_id=b.match_id AND a.team_id=b.team_id AND a.puuid<b.puuid""").fetchone()[0]
     assert pairs == 2 * 2 * 10   # 10 teammate pairs per team
     print("ok")
+
+
+def test_ladder_and_resume():
+    path = os.path.join(tempfile.mkdtemp(), "l.sqlite")
+    fake = FakeClient()
+    pages = []
+
+    def league_entries(tier, div, page=1):
+        pages.append((tier, div, page))
+        if page > 2:
+            return []
+        return [{"puuid": f"{tier}-{div}-{page}-{k}", "tier": tier, "rank": div, "leaguePoints": 0,
+                 "wins": 1, "losses": 1} for k in range(3)]
+    fake.league_entries = league_entries
+    fake.apex_entries = lambda tier: [{"puuid": f"{tier}-x", "tier": tier, "rank": "I", "leaguePoints": 900,
+                                       "wins": 50, "losses": 40}]
+    collect.make_client = lambda: fake
+
+    class A:
+        db = path; tiers = ["GOLD"]; players_per_tier = 4; ladder = True
+        matches_per_player = 3; seed = 1
+        season_start = "2026-01-08"
+    collect.run(A)
+    conn = db.connect(path)
+    assert conn.execute("SELECT COUNT(*) FROM ladder").fetchone()[0] == 7 * 4 * 2 * 3 + 3
+    assert len(pages) == 7 * 4 * 3                 # two full pages and one empty page per division
+    seeds = conn.execute("SELECT puuid FROM seed_progress").fetchall()
+    assert len(seeds) == 4 and all(s[0].startswith("GOLD-") for s in seeds)   # drawn from the ladder
+
+    # Rerun: ladder is done and seeds are done at this game count, so no requests at all.
+    pages.clear(); fake.calls = 0
+    fake.season_match_ids = lambda *a, **k: (_ for _ in ()).throw(AssertionError("refetched a done seed"))
+    collect.run(A)
+    assert pages == [] and fake.calls == 0
+
+
+def test_collector_rekeys_after_key_change():
+    """A key that sees new PUUIDs is detected; stored matches, seeds and ladder tiers move to them."""
+    path = os.path.join(tempfile.mkdtemp(), "e.sqlite")
+    fake = FakeClient()
+    fake.account_by_riot_id = lambda name, tag: {"puuid": name.replace("Name", "p")}
+    collect.make_client = lambda: fake
+
+    class A:
+        db = path; tiers = ["GOLD"]; players_per_tier = 2
+        matches_per_player = 3; seed = 1
+        season_start = "2026-01-08"
+    collect.run(A)
+    conn = db.connect(path)
+    conn.execute("UPDATE players SET sampled_at=1, tier='GOLD', riot_id='Name0#NA1' WHERE puuid='p0'")
+    conn.execute("INSERT INTO ladder VALUES ('p7','GOLD','II',5,1,1,0)")
+    conn.commit()
+
+    old_match = fake.match
+
+    def new_key_match(mid):
+        m = old_match(mid)
+        for p in m["info"]["participants"]:
+            p["puuid"] = "new-" + p["puuid"]
+        return m
+    fake.match = new_key_match
+    fake.account_by_riot_id = lambda name, tag: {"puuid": "new-" + name.replace("Name", "p")}
+    A.players_per_tier = 0
+    collect.run(A)
+    assert conn.execute("SELECT COUNT(*) FROM participants WHERE puuid NOT LIKE 'new-%'").fetchone()[0] == 0
+    assert conn.execute("SELECT COUNT(*) FROM participants").fetchone()[0] == 20
+    assert conn.execute("SELECT tier, sampled_at FROM players WHERE puuid='new-p0'").fetchone() == ("GOLD", 1)
+    assert conn.execute("SELECT COUNT(*) FROM players WHERE puuid='p0'").fetchone()[0] == 0
+    assert conn.execute("SELECT tier FROM ladder WHERE puuid='new-p7'").fetchone() == ("GOLD",)
+
+    calls = fake.calls   # same key again: nothing to re-key
+    collect.run(A)
+    assert fake.calls == calls
 
 
 def test_profile_insufficient_data():

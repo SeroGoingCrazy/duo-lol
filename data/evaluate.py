@@ -8,8 +8,8 @@ fit slice; metrics are reported on the eval slice, so no number is scored on dat
 Every 组合 (two teammates) is scored with the champions they actually played. The model
 must beat the coin-flip baseline (log loss 0.693) to pass.
 
-Only seed players have a known tier; a teammate's tier falls back to the match's seed tier,
-so most 组合 show a gap of 0 until the collector also fetches teammates' tiers.
+A player's tier comes from their seed entry, else from the 天梯快照 (collect.py --ladder);
+players in neither fall back to the match's seed tier (gap 0).
 """
 import argparse
 import hashlib
@@ -71,7 +71,9 @@ def load_teams(conn):
 
 
 def player_tiers(conn):
-    return dict(conn.execute("SELECT puuid, tier FROM players WHERE tier IS NOT NULL"))
+    tiers = dict(conn.execute("SELECT puuid, tier FROM ladder"))
+    tiers.update(conn.execute("SELECT puuid, tier FROM players WHERE tier IS NOT NULL"))
+    return tiers
 
 
 def pair_elo(source, record, tier_of, a, b, team_tier, gap_table):
@@ -79,9 +81,12 @@ def pair_elo(source, record, tier_of, a, b, team_tier, gap_table):
     ta, tb = tier_of.get(a["puuid"], team_tier), tier_of.get(b["puuid"], team_tier)
     ca = {"champion": a["champion"], "position": a["position"], **record(a)}
     cb = {"champion": b["champion"], "position": b["position"], **record(b)}
-    syn, _ = synergy(source, ta, ca, tb, cb)
+    # 全服统计 are counted per seed tier, so champions are looked up at the team's seed tier;
+    # the players' own tiers only set the 段位差.
+    syn, _ = synergy(source, team_tier, ca, team_tier, cb)
     gap = abs(TIER_ORDER.index(ta) - TIER_ORDER.index(tb))
-    return champion_score(source, ta, ca) + champion_score(source, tb, cb) + syn + gap_table.get(gap, 0.0), gap
+    return (champion_score(source, team_tier, ca) + champion_score(source, team_tier, cb) + syn
+            + gap_table.get(gap, 0.0)), gap
 
 
 def run(conn, gap_table=None):
