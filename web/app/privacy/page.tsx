@@ -1,12 +1,16 @@
 import type { Metadata } from "next";
 import { Card } from "@/components/ui/card";
+import { getT } from "@/lib/lang";
 
-export const metadata: Metadata = { title: "隐私政策" };
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: (await getT())("隐私政策") };
+}
 
 const UPDATED = "2026-10-21";
 
 // PRD-v2 §9. Keep in step with what web/lib/db/schema.ts and data/db.py actually store.
-export default function PrivacyPage() {
+export default async function PrivacyPage() {
+  if ((await getT()).lang === "en") return <PrivacyEn />;
   return (
     <article className="mx-auto max-w-3xl space-y-4 text-sm leading-relaxed">
       <h1 className="text-2xl font-bold tracking-tight lg:text-3xl">隐私政策</h1>
@@ -43,6 +47,47 @@ export default function PrivacyPage() {
         <p>搭配评分只说明两名玩家搭配得合不合适，不是任何一个人的实力、段位或隐藏分（MMR）评分，也不代表 Riot Games 的排位系统。</p>
       </Card>
       <p className="text-muted-foreground">有问题请在 Discord 联系网站管理员。</p>
+    </article>
+  );
+}
+
+function PrivacyEn() {
+  return (
+    <article className="mx-auto max-w-3xl space-y-4 text-sm leading-relaxed">
+      <h1 className="text-2xl font-bold tracking-tight lg:text-3xl">Privacy policy</h1>
+      <p className="text-muted-foreground">Updated {UPDATED}</p>
+      <Card className="space-y-3">
+        <h2 className="font-semibold">What we collect</h2>
+        <ul className="list-disc space-y-1 pl-5">
+          <li><b>Discord login</b>: your Discord user ID and username, to log you in. You decide whether matches see the username. We don&apos;t read your email, friends or servers.</li>
+          <li><b>Riot account</b>: the Riot ID you link and the account identifier (PUUID) Riot provides.</li>
+          <li><b>Match data</b>: public NA Ranked Solo/Duo games read through Riot&apos;s official API (champions, roles, wins, ranks), used to predict win rates and for overall statistics.</li>
+          <li><b>What you do here</b>: preferences (roles, whether you want to be recommended, picked champions), likes and passes, matches, blocks and reports, and when you last logged in.</li>
+        </ul>
+      </Card>
+      <Card className="space-y-3">
+        <h2 className="font-semibold">What we use it for</h2>
+        <ul className="list-disc space-y-1 pl-5">
+          <li>Predicting how two players do together in duo, and suggesting partners.</li>
+          <li>Your Riot ID, and the Discord name if you allow it, is shown only after you both like each other (a match). Before that, nobody can see your Riot ID.</li>
+          <li>Handling reports and preventing abuse.</li>
+        </ul>
+        <p>We don&apos;t sell data, show ads or share data with third parties, except where the law requires it.</p>
+      </Card>
+      <Card className="space-y-3">
+        <h2 className="font-semibold">How long we keep it, and deleting it</h2>
+        <ul className="list-disc space-y-1 pl-5">
+          <li>Turning off “Recommend me” takes you out of the pool at once; you won&apos;t appear in anyone&apos;s deck.</li>
+          <li>Deleting your account in My account removes your membership, login, preferences, swipes, matches, blocks and reports right away.</li>
+          <li>If an admin paused your Riot account after reports, we keep that account identifier after deletion so re-registering can&apos;t undo it.</li>
+          <li>Public match data stays part of the overall statistics but is no longer tied to you as a member.</li>
+        </ul>
+      </Card>
+      <Card className="space-y-3">
+        <h2 className="font-semibold">About the score</h2>
+        <p>The duo score only says how well two players fit together. It is not a skill, rank or MMR rating of anyone, and it has nothing to do with Riot Games&apos; ranked system.</p>
+      </Card>
+      <p className="text-muted-foreground">Questions? Contact the site admin on Discord.</p>
     </article>
   );
 }

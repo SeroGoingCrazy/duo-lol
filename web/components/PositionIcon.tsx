@@ -1,4 +1,5 @@
-import { positionLabel } from "@/lib/labels";
+"use client";
+import { useT } from "@/components/LangProvider";
 import { cn } from "@/lib/utils";
 
 // Drawn after the in-game position icons: a lane corner for top/bottom, the diagonal for mid.
@@ -10,10 +11,10 @@ const PATHS: Record<string, React.ReactNode> = {
   UTILITY: (<><path d="M9 3h6l-1 6h-4z" /><path d="M2 7h7l1 3-3 3zM22 7h-7l-1 3 3 3z" /><path d="M10 11h4l1 5-3 5-3-5z" /></>),
 };
 
-/** Position icon with its Chinese name for screen readers (and as visible text when showLabel). */
+/** Position icon with its name for screen readers (and as visible text when showLabel). */
 export default function PositionIcon({ position, size = 20, showLabel = false, className }:
   { position: string; size?: number; showLabel?: boolean; className?: string }) {
-  const label = positionLabel(position);
+  const label = useT().position(position);
   return (
     <span className={cn("inline-flex items-center gap-1.5", className)} title={label} data-position={position}>
       <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden className="shrink-0 text-gold">

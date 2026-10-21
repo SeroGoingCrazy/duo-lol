@@ -122,9 +122,6 @@ export function riotIdProblem(id: string): string | null {
   return null;
 }
 
-export const pct = (x: number) => `${(x * 100).toFixed(1)}%`;
-/** 胜率差 in percentage points, e.g. "0.4 个百分点". */
-export const points = (x: number) => `${Math.abs(x * 100).toFixed(1)} 个百分点`;
 
 /** One 卡片 in a 牌堆. id is the 会员 id (or the Riot ID key in the demo); riot_id only after 互选. */
 export type DeckCard = Omit<Partner, "riot_id"> & { id: string; riot_id?: string; discord?: string | null };

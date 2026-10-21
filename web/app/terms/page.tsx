@@ -1,11 +1,15 @@
 import type { Metadata } from "next";
 import { Card } from "@/components/ui/card";
+import { getT } from "@/lib/lang";
 
-export const metadata: Metadata = { title: "服务条款" };
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: (await getT())("服务条款") };
+}
 
 const UPDATED = "2026-10-21";
 
-export default function TermsPage() {
+export default async function TermsPage() {
+  if ((await getT()).lang === "en") return <TermsEn />;
   return (
     <article className="mx-auto max-w-3xl space-y-4 text-sm leading-relaxed">
       <h1 className="text-2xl font-bold tracking-tight lg:text-3xl">服务条款</h1>
@@ -28,6 +32,34 @@ export default function TermsPage() {
       <Card className="space-y-3">
         <h2 className="font-semibold">免责声明</h2>
         <p>网站按现状提供，可能出错或暂停服务。和其他会员的来往由你自己负责，请注意保护个人信息。</p>
+      </Card>
+    </article>
+  );
+}
+
+function TermsEn() {
+  return (
+    <article className="mx-auto max-w-3xl space-y-4 text-sm leading-relaxed">
+      <h1 className="text-2xl font-bold tracking-tight lg:text-3xl">Terms of service</h1>
+      <p className="text-muted-foreground">Updated {UPDATED}</p>
+      <Card className="space-y-3">
+        <h2 className="font-semibold">What this site is</h2>
+        <p>A tool that helps NA League of Legends players find a Ranked Solo/Duo partner: it predicts how two players do together from their public games, and swaps Riot IDs once both agree. It is a free, unofficial fan project, not a Riot Games product.</p>
+        <p>Predicted win rates and duo scores are statistical estimates of how well two players fit. They guarantee nothing and don&apos;t rate anyone&apos;s skill. Whether you queue together and what you pick is up to you.</p>
+      </Card>
+      <Card className="space-y-3">
+        <h2 className="font-semibold">Rules</h2>
+        <ul className="list-disc space-y-1 pl-5">
+          <li>Only link your own Riot account.</li>
+          <li>Don&apos;t harass, abuse or threaten other members, including after a match.</li>
+          <li>Don&apos;t use the site for boosting, account trading or anything else against Riot Games&apos; terms of service.</li>
+          <li>Don&apos;t scrape the site or get around limits such as the daily likes.</li>
+        </ul>
+        <p>Accounts that break these rules may be paused or removed. You can block or report members, and delete your account, at any time.</p>
+      </Card>
+      <Card className="space-y-3">
+        <h2 className="font-semibold">Disclaimer</h2>
+        <p>The site is provided as is and may be wrong or unavailable. You are responsible for how you deal with other members; keep your personal information safe.</p>
       </Card>
     </article>
   );

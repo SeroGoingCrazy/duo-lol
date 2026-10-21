@@ -6,12 +6,15 @@ import { Button } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
 import { getDb, schema } from "@/lib/db";
 import { isAdmin, SUSPEND_AFTER } from "@/lib/deckServer";
+import { getT } from "@/lib/lang";
 import { dismissReports, restoreMember, suspendMember } from "./actions";
 
-export const metadata: Metadata = { title: "管理" };
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: (await getT())("管理") };
+}
 export const dynamic = "force-dynamic";
 
-/** Report queue (PRD-v2 §8, M3): open reports grouped by the reported 会员, plus everyone paused. */
+/** Report queue (PRD-v2 §8, M3), for the site's own admins, so its body stays in Chinese: open reports grouped by the reported 会员, plus everyone paused. */
 export default async function AdminPage() {
   if (!(await isAdmin((await auth())?.user?.id))) notFound();
   const db = await getDb();

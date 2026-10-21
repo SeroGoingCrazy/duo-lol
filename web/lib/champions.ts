@@ -42,3 +42,9 @@ export function championInfo(): Promise<Record<string, ChampionInfo>> {
     .catch(() => ({}));
   return info;
 }
+
+/** The name to show: Chinese (盲僧) or English (Lee Sin); the id if Data Dragon is unreachable. */
+export function championName(info: Record<string, ChampionInfo>, champion: string, lang: "zh" | "en") {
+  const c = info[champion];
+  return c ? (lang === "en" ? c.english : c.name) : champion;
+}

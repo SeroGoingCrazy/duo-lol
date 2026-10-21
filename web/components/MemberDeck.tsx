@@ -14,13 +14,16 @@ import {
 import type { Swipe } from "@/lib/deck";
 import { REPORT_REASONS } from "@/lib/reportReasons";
 import { useChampionInfo } from "@/lib/useChampionInfo";
+import { useT } from "@/components/LangProvider";
 
 const RETRY_MAX_S = 600;   // an empty 牌堆 retries with 1.5x backoff up to this (PRD-v2 §2.1)
 
 /** 找搭子 for a bound 会员 who 同意被推荐: real 喜欢 / 跳过 against other 会员 (PRD-v2 §3.2-3.4). */
 export default function MemberDeck({ riotId }: { riotId: string }) {
   const info = useChampionInfo();
-  const [loading, setLoading] = useState("");
+  const t = useT();
+  // what is loading, kept as data so the label follows a language switch: the deck, or a Riot ID's lookup
+  const [loading, setLoading] = useState<{ riotId?: string } | null>(null);
   const [error, setError] = useState("");
   const [needPicks, setNeedPicks] = useState<Player | null>(null);
   const [champions, setChampions] = useState<string[]>([]);
@@ -36,7 +39,7 @@ export default function MemberDeck({ riotId }: { riotId: string }) {
   const me = useRef<Player | null>(null);
 
   const load = useCallback(async (quiet = false) => {
-    if (!quiet) setLoading("正在从推荐池里准备你的牌堆…");
+    if (!quiet) setLoading({});
     try {
       const d = await getDeck();
       setCards(d.cards); setTotal(d.cards.length); setLikers(new Set(d.likes_you)); setMutual(d.mutual);
@@ -51,7 +54,7 @@ export default function MemberDeck({ riotId }: { riotId: string }) {
       if (e instanceof ApiError && e.status === 422 && me.current) setNeedPicks(me.current);
       else setError(e instanceof ApiError ? e.message : String(e));
     } finally {
-      setLoading("");
+      setLoading(null);
     }
   }, []);
 
@@ -59,17 +62,17 @@ export default function MemberDeck({ riotId }: { riotId: string }) {
     listChampions().then(setChampions).catch(() => setChampions([]));
     (async () => {
       try {
-        setLoading(`正在读取 ${riotId} 本赛季的单双排对局…`);
+        setLoading({ riotId });
         me.current = await ensurePlayer(riotId);
         await load();
       } catch (e) {
         setError(e instanceof ApiError ? e.message : String(e));
-        setLoading("");
+        setLoading(null);
       }
     })();
     const b = backoff.current;
     return () => { if (b.timer) clearTimeout(b.timer); };
-  }, [riotId, load]);
+  }, [riotId, load]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   const remove = (id: string) => {
     setCards((cs) => cs?.filter((c) => c.id !== id) ?? cs);
@@ -117,26 +120,28 @@ export default function MemberDeck({ riotId }: { riotId: string }) {
 
   const small = "h-7 px-2 text-xs text-muted-foreground";
   const safety = (c: DeckCard) => <>
-    <Button variant="ghost" className={small} onClick={() => act(() => blockMember(c.id), c.id)}>拉黑</Button>
-    <Button variant="ghost" className={small} onClick={() => setReporting(c)}>举报</Button>
+    <Button variant="ghost" className={small} onClick={() => act(() => blockMember(c.id), c.id)}>{t("拉黑")}</Button>
+    <Button variant="ghost" className={small} onClick={() => setReporting(c)}>{t("举报")}</Button>
   </>;
 
   return (
     <div className="mx-auto max-w-6xl">
       <div className="mb-3 flex flex-wrap items-end justify-between gap-4 sm:mb-6">
         <div>
-          <div className="mb-2 hidden items-center gap-1.5 text-xs font-medium text-primary sm:flex"><Sparkles className="size-3.5" />找到合拍的下一局</div>
-          <h1 className="text-3xl font-bold tracking-tight">找搭子</h1>
-          <p className="mt-2 hidden text-sm text-muted-foreground sm:block">推荐池里都是同意被推荐的会员。右滑喜欢，左滑跳过，互相喜欢后才能看到对方的 Riot ID。</p>
+          <div className="mb-2 hidden items-center gap-1.5 text-xs font-medium text-primary sm:flex"><Sparkles className="size-3.5" />{t("找到合拍的下一局")}</div>
+          <h1 className="text-3xl font-bold tracking-tight">{t("找搭子")}</h1>
+          <p className="mt-2 hidden text-sm text-muted-foreground sm:block">{t("推荐池里都是同意被推荐的会员。右滑喜欢，左滑跳过，互相喜欢后才能看到对方的 Riot ID。")}</p>
         </div>
         <span className="rounded-full border bg-card px-3 py-1.5 text-xs text-muted-foreground" data-testid="deck-owner">
-          {riotId}{likesLeft != null && <><span className="mx-1 text-border">/</span>今天还能喜欢 {likesLeft} 次</>}
+          {riotId}{likesLeft != null && <><span className="mx-1 text-border">/</span>{t("今天还能喜欢 {n} 次", { n: likesLeft })}</>}
         </span>
       </div>
 
       <div className="space-y-3">
-        {loading && <LookupProgress label={loading} hint={loading.startsWith("正在读取") ? "第一次查询大约需要 2 分钟，之后会缓存。" : undefined} />}
-        {error && <Alert variant="error">{error}</Alert>}
+        {loading && (loading.riotId
+          ? <LookupProgress label={t("正在读取 {id} 本赛季的单双排对局…", { id: loading.riotId })} hint={t("第一次查询大约需要 2 分钟，之后会缓存。")} />
+          : <LookupProgress label={t("正在从推荐池里准备你的牌堆…")} />)}
+        {error && <Alert variant="error">{t.api(error)}</Alert>}
         {needPicks && <SelfReportForm className="max-w-3xl" player={needPicks} champions={champions}
           onSubmit={async (r) => { try { await saveSelfReport(r); await load(); } catch (e) { setError(e instanceof ApiError ? e.message : String(e)); } }} />}
       </div>
@@ -145,13 +150,13 @@ export default function MemberDeck({ riotId }: { riotId: string }) {
         <DeckStage remaining={cards} total={total} mutual={mutual} likes={cards.filter((c) => likers.has(c.id))} info={info}
           canUndo={canUndo} onSwipe={onSwipe} onUndo={onUndo} cardActions={safety} paused={!!reporting}
           mutualActions={(c) => <>
-            <Button variant="ghost" className={small} onClick={() => act(() => cancelMutualLike(c.id), c.id)}>取消互选</Button>
+            <Button variant="ghost" className={small} onClick={() => act(() => cancelMutualLike(c.id), c.id)}>{t("取消互选")}</Button>
             {safety(c)}
           </>}
           empty={<>
-            <p className="font-semibold">暂时没有更多搭子了</p>
-            <p className="text-sm text-muted-foreground">有新会员加入时会自动出现新的卡片。也可以去查组合，直接算你和某个人的分数。</p>
-            <Button variant="outline" asChild><a href="/">去查组合</a></Button>
+            <p className="font-semibold">{t("暂时没有更多搭子了")}</p>
+            <p className="text-sm text-muted-foreground">{t("有新会员加入时会自动出现新的卡片。也可以去查组合，直接算你和某个人的分数。")}</p>
+            <Button variant="outline" asChild><a href="/">{t("去查组合")}</a></Button>
           </>} />
       )}
 
@@ -167,26 +172,27 @@ function ReportDialog({ card, onClose, onSubmit }: {
   const [reason, setReason] = useState<string>(REPORT_REASONS[0]);
   const [detail, setDetail] = useState("");
   const [busy, setBusy] = useState(false);
+  const t = useT();
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-labelledby="report-title" data-testid="report-dialog">
       <Card className="w-full max-w-sm space-y-4">
-        <CardTitle id="report-title">举报{card.riot_id ? ` ${card.riot_id}` : "这名会员"}</CardTitle>
-        <p className="text-xs text-muted-foreground">举报会同时拉黑对方，管理员会人工处理。对方不会知道是谁举报的。</p>
+        <CardTitle id="report-title">{t("举报 {who}", { who: card.riot_id || t("这名会员") })}</CardTitle>
+        <p className="text-xs text-muted-foreground">{t("举报会同时拉黑对方，管理员会人工处理。对方不会知道是谁举报的。")}</p>
         <fieldset className="space-y-2">
-          <legend className="sr-only">理由</legend>
+          <legend className="sr-only">{t("理由")}</legend>
           {REPORT_REASONS.map((r) => (
             <label key={r} className="flex items-center gap-2 text-sm">
-              <input type="radio" name="reason" value={r} checked={reason === r} onChange={() => setReason(r)} />{r}
+              <input type="radio" name="reason" value={r} checked={reason === r} onChange={() => setReason(r)} />{t(r)}
             </label>
           ))}
         </fieldset>
         <label className="block text-sm">
-          <span className="mb-1 block text-muted-foreground">补充说明（可选）</span>
+          <span className="mb-1 block text-muted-foreground">{t("补充说明（可选）")}</span>
           <textarea className="w-full rounded-md border bg-background p-2 text-sm" rows={3} maxLength={500} value={detail} onChange={(e) => setDetail(e.target.value)} />
         </label>
         <div className="flex justify-end gap-2">
-          <Button variant="ghost" onClick={onClose}>取消</Button>
-          <Button disabled={busy} onClick={async () => { setBusy(true); await onSubmit(reason, detail); }}>提交举报</Button>
+          <Button variant="ghost" onClick={onClose}>{t("取消")}</Button>
+          <Button disabled={busy} onClick={async () => { setBusy(true); await onSubmit(reason, detail); }}>{t("提交举报")}</Button>
         </div>
       </Card>
     </div>
