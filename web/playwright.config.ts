@@ -3,7 +3,8 @@ import { existsSync } from "node:fs";
 
 // End-to-end run against a synthetic database and the fake Riot client (data/fake_riot.py):
 // no Riot key or network needed. Covers PRD §5 acceptance criteria 2 and 3.
-const DB = "/tmp/duo-lol-e2e.sqlite";
+// DUO_E2E_DB=postgresql://... runs the Python side on an empty Postgres database instead.
+const DB = process.env.DUO_E2E_DB ?? "/tmp/duo-lol-e2e.sqlite";
 const SCALE = "/tmp/duo-lol-e2e-scale.json";
 const APP_DB = "/tmp/duo-lol-e2e-app";   // PGlite directory for the app schema (lib/db)
 const chromium = "/opt/pw-browsers/chromium";
@@ -23,7 +24,7 @@ export default defineConfig({
   },
   webServer: [
     {
-      command: `rm -f ${DB} ${SCALE} && uv run python data/fake_riot.py ${DB} && uv run python data/score_scale.py --db ${DB} --out ${SCALE} && DUO_DB=${DB} DUO_SCORE_SCALE=${SCALE} DUO_FAKE_RIOT=1 DUO_INTERNAL_SECRET=${INTERNAL} uv run uvicorn api:app --app-dir data --port 8100`,
+      command: `rm -f ${SCALE} && ${DB.includes("://") ? "" : `rm -f ${DB} && `}uv run python data/fake_riot.py '${DB}' && uv run python data/score_scale.py --db '${DB}' --out ${SCALE} && DUO_DB='${DB}' DUO_SCORE_SCALE=${SCALE} DUO_FAKE_RIOT=1 DUO_INTERNAL_SECRET=${INTERNAL} uv run uvicorn api:app --app-dir data --port 8100`,
       cwd: "..",
       url: "http://127.0.0.1:8100/api/champions",
       timeout: 120_000,

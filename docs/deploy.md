@@ -1,25 +1,33 @@
 # 部署
 
-PRD-v2 §6 的方案：网站在 Vercel，Python API 在 Fly.io（美东），会员库在 Neon Postgres。都有免费或低价档位。
-Python 的对局数据暂时还是 SQLite 文件（M1 才迁到 Postgres），放在 Fly 的磁盘卷上。
+PRD-v2 §6 的方案：网站在 Vercel，Python API 在 Fly.io（美东），数据库是一个 Neon Postgres（美东，US East 1）。都有免费或低价档位。
+会员库在 `app` schema，对局数据在 `data` schema（ADR-0004）。采集在本地跑，直接写进同一个 Neon，线上 API 读它，不用再传文件。
 
 ## 1. Python API（Fly.io）
 
 ```sh
 fly launch --no-deploy            # 用仓库里的 fly.toml 和 Dockerfile，app 名可以改
 fly volumes create duo_data --region iad --size 3
-fly secrets set RIOT_API_KEY=RGAPI-... DUO_INTERNAL_SECRET=$(openssl rand -hex 32)
+fly secrets set RIOT_API_KEY=RGAPI-... DUO_INTERNAL_SECRET=$(openssl rand -hex 32) DATABASE_URL='postgresql://...'
 fly deploy
 ```
 
-- 把本地的 `lol_duo.sqlite` 传上去：`fly ssh sftp shell`，`put lol_duo.sqlite /data/incoming.sqlite`，再 `fly machine restart`。启动时会用它替换正在用的库（连同 WAL 文件），并删掉旧的 `score_scale.json`，搭配评分在后台按新数据重新拟合。**不要直接覆盖 `/data/lol_duo.sqlite`**，服务在写它。
-- 每天采集完可以照样再传一次。注意：替换会丢掉线上这段时间查过的玩家缓存，他们下次查询要重新从 Riot 拉。M1 迁到 Postgres 后就不用传文件了。
+- `DATABASE_URL` 是 Neon 的连接串（和网站用的同一个）。Python 会自己建 `data` schema 和表；连接串里的 `-pooler` 会被换成直连地址，因为连接池会丢掉 schema 设置。
+- 磁盘卷只存拟合好的搭配评分（`score_scale.json`），第一次启动时在后台按数据库拟合。数据多了以后想重新拟合：`fly ssh console -C "rm /data/score_scale.json"` 再 `fly machine restart`。
 - **`DUO_INTERNAL_SECRET` 必须设。** 设了以后，Python API 只接受带这个密钥的请求，浏览器只能通过网站允许的几个接口（`web/app/api/[...path]`）访问它，Riot 头像查询和会员牌堆接口不会被直接调用。
 - 开发者 Key 每 24 小时过期，过期后 `fly secrets set RIOT_API_KEY=...` 换新的（会自动重启）。正式上线前要申请 Personal 或 Production Key。
 
-## 2. 会员库（Neon）
+## 2. 数据库（Neon）
 
-在 Neon 建一个美东的数据库，复制连接串（`postgres://...?sslmode=require`）。表会在网站第一次连上时自动迁移（`web/drizzle/`）。
+在 Neon 建一个美东（AWS US East 1）的项目，复制连接串（`postgresql://...?sslmode=require`）。网站的表在第一次连上时自动迁移（`web/drizzle/`），Python 的表在第一次连上时自动创建。
+
+本地采集改写 Neon：在根目录 `.env` 里填 `DATABASE_URL`，已有的 SQLite 数据先搬一次：
+
+```sh
+uv run python data/to_postgres.py lol_duo.sqlite   # 先停掉定时采集；Neon 里已有数据时会拒绝
+```
+
+之后 `collect.py`、`evaluate.py`、`score_scale.py` 和 API 不加 `--db` / `DUO_DB` 就用 Neon。Windows 定时任务给 `scripts/collect-scheduled.ps1` 加上 `-Postgres`。
 
 ## 3. 网站（Vercel）
 

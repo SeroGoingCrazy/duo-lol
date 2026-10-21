@@ -2,7 +2,7 @@
 
     uv run uvicorn api:app --app-dir data --port 8000
 
-Env: DUO_INTERNAL_SECRET (required on every request when set; the site sends it), DUO_DB (SQLite path, default lol_duo.sqlite), DUO_GAP_TABLE (段位差 JSON from
+Env: DUO_INTERNAL_SECRET (required on every request when set; the site sends it), DUO_DB (SQLite path or Postgres URL; else DATABASE_URL, else lol_duo.sqlite), DUO_GAP_TABLE (段位差 JSON from
 evaluate.py, default data/rank_gap.json), DUO_SCORE_SCALE (搭配评分 scale from score_scale.py,
 default data/score_scale.json; fitted in the background at startup if missing), RIOT_API_KEY via .env.
 New players are fetched in a background job whose progress the site polls (PRD §5.2).
@@ -29,7 +29,7 @@ import score_scale
 import service
 from stats_source import CachedSource, OwnDataSource
 
-DB_PATH = os.environ.get("DUO_DB", "lol_duo.sqlite")
+DB_PATH = db.default_target()
 GAP_TABLE = predict.load_gap_table(os.environ.get("DUO_GAP_TABLE", str(Path(__file__).parent / "rank_gap.json")))
 SCORE_SCALE_PATH = os.environ.get("DUO_SCORE_SCALE", str(Path(__file__).parent / "score_scale.json"))
 MAX_PICKS, MAX_PICK_ROLES = 5, 2   # PRD §2.3: up to 5 自选英雄 in up to 2 positions
@@ -62,7 +62,7 @@ _client_lock = threading.Lock()
 
 
 def connect():
-    """Fresh connection per request; SQLite connections are not shared across threads."""
+    """Fresh connection per request; connections are not shared across threads."""
     return closing(db.connect(DB_PATH))
 
 
