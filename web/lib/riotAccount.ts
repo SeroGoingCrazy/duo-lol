@@ -1,5 +1,5 @@
 // Server-side calls from the website to the Python API (ADR-0004): the site never talks to Riot itself.
-const API_URL = process.env.DUO_API_URL ?? "http://127.0.0.1:8000";
+export const API_URL = process.env.DUO_API_URL ?? "http://127.0.0.1:8000";
 
 export type RiotAccount = { puuid: string; riot_id: string; profile_icon_id: number };
 

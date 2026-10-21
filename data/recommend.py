@@ -9,6 +9,7 @@ import json
 import player_profile
 import predict
 from predict import TIER_ORDER
+from service import riot_id_key
 
 TOP_N = 5
 DIVISIONS = ["IV", "III", "II", "I"]
@@ -94,21 +95,30 @@ def candidate_pool(conn, require_opt_in=False):
     return list(pool.values())
 
 
-def recommend(conn, source, me, gap_table=None, require_opt_in=False, top_n=TOP_N):
-    """me = service.lookup_player(...) result. Returns the best partners, highest first."""
+def recommend(conn, source, me, gap_table=None, require_opt_in=False, top_n=TOP_N, only=None, reports=None):
+    """me = service.lookup_player(...) result. Returns the best partners, highest first.
+
+    only: restrict the pool to these players (the site's 会员 who pass its own filters), matched by
+    puuid or by Riot ID key, since a new API key re-encrypts puuids. reports: {puuid: profile} from
+    自选英雄, used for those players when they are 数据不足."""
     # Unranked players are scored as UNRANKED_TIER (PRD decision) and matched at its bottom division.
     my_rank = (me["tier"], me["division"], me["league_points"]) if me["tier"] else (me["profile"]["tier"], "IV", 0)
     results = []
     for puuid, riot_id, rank, ids in candidate_pool(conn, require_opt_in):
         tier = rank[0]
+        if only is not None and puuid not in only and riot_id_key(riot_id) not in only:
+            continue
         if puuid == me["puuid"] or not can_duo(my_rank, rank):
             continue
         profile = player_profile.proficiency(conn, puuid, ids)
         if profile["insufficient_data"]:
-            continue
+            reported = (reports or {}).get(puuid) or (reports or {}).get(riot_id_key(riot_id))
+            if not reported:
+                continue
+            profile = dict(reported)
         profile["tier"] = tier
         out = predict.predict_pair(source, me["profile"], profile, gap_table)
         if out:
-            results.append({"riot_id": riot_id, "tier": tier, "division": rank[1], **out})
+            results.append({"puuid": puuid, "riot_id": riot_id, "tier": tier, "division": rank[1], **out})
     results.sort(key=lambda r: r["win_rate"], reverse=True)
     return results[:top_n]

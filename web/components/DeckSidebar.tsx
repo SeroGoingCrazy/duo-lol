@@ -3,19 +3,20 @@ import { useState } from "react";
 import { HeartHandshake } from "lucide-react";
 import CopyButton from "@/components/CopyButton";
 import PositionIcon from "@/components/PositionIcon";
-import { type Partner } from "@/lib/api";
+import { type DeckCard } from "@/lib/api";
 import { tierLabel } from "@/lib/labels";
 import { cn } from "@/lib/utils";
 
 type Tab = "mutual" | "likes";
 
 /** Secondary panel: 互选 reveals the Riot ID; 喜欢我的人 keeps it hidden. */
-export default function DeckSidebar({ mutual, likes, onOpen, className, disabled = false }: {
-  mutual: Partner[];
-  likes: Partner[];
-  onOpen: (p: Partner) => void;      // put a 喜欢我的人 card on top of the 牌堆
+export default function DeckSidebar({ mutual, likes, onOpen, className, disabled = false, actions }: {
+  mutual: DeckCard[];
+  likes: DeckCard[];
+  onOpen: (p: DeckCard) => void;      // put a 喜欢我的人 card on top of the 牌堆
   className?: string;
   disabled?: boolean;
+  actions?: (p: DeckCard) => React.ReactNode;
 }) {
   const [tab, setTab] = useState<Tab>("mutual");
   const tabButton = (key: Tab, label: string, n: number) => (
@@ -27,7 +28,7 @@ export default function DeckSidebar({ mutual, likes, onOpen, className, disabled
       {label} <span className="tabular-nums">{n}</span>
     </button>
   );
-  const score = (p: Partner) => <span className="font-semibold tabular-nums">{p.score ?? "–"}<span className="text-xs font-normal text-muted-foreground"> 分</span></span>;
+  const score = (p: DeckCard) => <span className="font-semibold tabular-nums">{p.score ?? "–"}<span className="text-xs font-normal text-muted-foreground"> 分</span></span>;
 
   return (
     <aside className={cn("flex min-h-0 flex-col rounded-2xl border bg-card p-5", className)} data-testid="deck-sidebar">
@@ -42,13 +43,16 @@ export default function DeckSidebar({ mutual, likes, onOpen, className, disabled
             ? <div className="rounded-xl bg-muted/60 px-4 py-7 text-center"><HeartHandshake className="mx-auto mb-3 size-8 text-muted-foreground/60" /><p className="mb-2 text-sm font-medium">下一位搭子，等你发现</p><p className="text-xs leading-relaxed text-muted-foreground">遇到合适的玩家就右滑喜欢。<br />互选后，在这里找到 TA 的 Riot ID。</p></div>
             : <ul className="space-y-2" data-testid="mutual-list">
                 {mutual.map((p) => (
-                  <li key={p.riot_id} className="flex items-center gap-3 rounded-lg border bg-background/40 p-3">
-                    <PositionIcon position={p.roles.b} size={22} />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1"><span className="truncate font-medium">{p.riot_id}</span><CopyButton text={p.riot_id} /></div>
-                      <div className="text-xs text-muted-foreground">{tierLabel(p.tier, p.division)}</div>
+                  <li key={p.id} className="rounded-lg border bg-background/40 p-3">
+                    <div className="flex items-center gap-3">
+                      <PositionIcon position={p.roles.b} size={22} />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1"><span className="truncate font-medium">{p.riot_id}</span>{p.riot_id && <CopyButton text={p.riot_id} />}</div>
+                        <div className="text-xs text-muted-foreground">{p.discord ? `Discord：${p.discord}` : tierLabel(p.tier, p.division)}</div>
+                      </div>
+                      {score(p)}
                     </div>
-                    {score(p)}
+                    {actions && <div className="mt-2 flex flex-wrap gap-1 border-t pt-2">{actions(p)}</div>}
                   </li>
                 ))}
               </ul>
@@ -58,7 +62,7 @@ export default function DeckSidebar({ mutual, likes, onOpen, className, disabled
             ? <p className="text-sm text-muted-foreground">暂时没有新的人喜欢你。</p>
             : <ul className="space-y-2" data-testid="likes-list">
                 {likes.map((p) => (
-                  <li key={p.riot_id}>
+                  <li key={p.id}>
                     <button type="button" disabled={disabled} onClick={() => onOpen(p)}
                       className="flex w-full cursor-pointer items-center gap-3 rounded-lg border bg-background/40 p-3 text-left transition-colors hover:bg-accent disabled:opacity-50">
                       <PositionIcon position={p.roles.b} size={22} />

@@ -266,17 +266,41 @@ def pair(req: PairRequest):
             "score": score_scale.duo_score(out["win_rate"], scale), "notes": notes}
 
 
+class Candidate(BaseModel):
+    """A 会员 the site allows in this 牌堆 (PRD-v2 §3.2 filters are applied by the site)."""
+    puuid: str
+    riot_id: str
+    self_report: SelfReport | None = None
+
+
 class RecommendRequest(BaseModel):
     riot_id: str
     self_report: SelfReport | None = None
     limit: int = Field(recommend.TOP_N, ge=1, le=MAX_DECK)   # the 牌堆 asks for the whole ranked pool
+    candidates: list[Candidate] | None = Field(None, max_length=MAX_DECK * 5)   # None = the whole 推荐池
 
 
-def partner_list(conn, me, profile, limit=recommend.TOP_N):
+def candidate_reports(candidates):
+    """{puuid and Riot ID key: 自选英雄 profile} for candidates that sent one."""
+    out = {}
+    for c in candidates or []:
+        if c.self_report and c.self_report.picks:
+            picks = c.self_report.picks[:MAX_PICKS]
+            try:
+                tier = service.normalize_tier(c.self_report.tier)
+            except ValueError:
+                tier = service.UNRANKED_TIER
+            prof = predict.self_reported_profile(tier, [(p.champion, p.position) for p in picks])
+            out[c.puuid] = out[service.riot_id_key(c.riot_id)] = prof
+    return out
+
+
+def partner_list(conn, me, profile, limit=recommend.TOP_N, candidates=None):
+    only = None if candidates is None else {k for c in candidates for k in (c.puuid, service.riot_id_key(c.riot_id))}
     found = recommend.recommend(conn, CachedSource(OwnDataSource(conn)), {**me, "profile": profile}, GAP_TABLE,
-                                top_n=limit)
+                                top_n=limit, only=only, reports=candidate_reports(candidates))
     return [
-        {"riot_id": r["riot_id"], "tier": r["tier"], "division": r["division"], "win_rate": r["win_rate"],
+        {"puuid": r["puuid"], "riot_id": r["riot_id"], "tier": r["tier"], "division": r["division"], "win_rate": r["win_rate"],
          "win_rate_delta": r["win_rate_delta"], "score": score_scale.duo_score(r["win_rate"], scale),
          "roles": r["roles"], "top_pairs": [top_pair_summary(p) for p in r["top_pairs"]],
          "reasons": r["reasons"]}
@@ -294,7 +318,7 @@ def recommend_for(req: RecommendRequest):
     """找搭子; a 数据不足 player sends 自选英雄 the same way as for /api/pair."""
     with connect() as conn:
         me, profile, note = scored_profile(conn, req.riot_id, req.self_report)
-        return {"me": player_summary(me), "partners": partner_list(conn, me, profile, req.limit),
+        return {"me": player_summary(me), "partners": partner_list(conn, me, profile, req.limit, req.candidates),
                 "notes": [note] if note else []}
 
 

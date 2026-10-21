@@ -1,0 +1,73 @@
+import type { Metadata } from "next";
+import { desc, eq, inArray, isNotNull } from "drizzle-orm";
+import { notFound } from "next/navigation";
+import { auth } from "@/auth";
+import { Button } from "@/components/ui/button";
+import { Card, CardTitle } from "@/components/ui/card";
+import { getDb, schema } from "@/lib/db";
+import { isAdmin, SUSPEND_AFTER } from "@/lib/deckServer";
+import { dismissReports, restoreMember, suspendMember } from "./actions";
+
+export const metadata: Metadata = { title: "管理" };
+export const dynamic = "force-dynamic";
+
+/** Report queue (PRD-v2 §8, M3): open reports grouped by the reported 会员, plus everyone paused. */
+export default async function AdminPage() {
+  if (!(await isAdmin((await auth())?.user?.id))) notFound();
+  const db = await getDb();
+  const { members, reports } = schema;
+  const open = await db.select().from(reports).where(eq(reports.status, "open")).orderBy(desc(reports.createdAt));
+  const suspended = await db.select().from(members).where(isNotNull(members.suspendedAt));
+  const ids = [...new Set([...open.map((r) => r.toMember), ...open.map((r) => r.fromMember)])];
+  const names = new Map((ids.length ? await db.select().from(members).where(inArray(members.id, ids)) : [])
+    .map((m) => [m.id, m.riotId ?? m.name ?? m.id]));
+  const byTarget = new Map<string, typeof open>();
+  for (const r of open) byTarget.set(r.toMember, [...(byTarget.get(r.toMember) ?? []), r]);
+  const pausedIds = new Set(suspended.map((m) => m.id));
+  const hidden = (id: string) => <input type="hidden" name="member" value={id} />;
+
+  return (
+    <>
+      <h1 className="mb-1 text-2xl font-bold tracking-tight lg:text-3xl">管理</h1>
+      <p className="mb-5 text-sm text-muted-foreground">被 {SUSPEND_AFTER} 名不同会员举报的人会自动暂停推荐，等你处理。</p>
+      <div className="grid gap-4 xl:grid-cols-2 xl:items-start">
+        <Card data-testid="report-queue">
+          <CardTitle>待处理举报 {byTarget.size}</CardTitle>
+          {byTarget.size === 0 ? <p className="text-sm text-muted-foreground">没有待处理的举报。</p> : (
+            <ul className="space-y-3">
+              {[...byTarget].map(([target, rs]) => (
+                <li key={target} className="rounded-lg border p-3">
+                  <div className="mb-1 flex items-center justify-between gap-2">
+                    <span className="font-medium">{names.get(target)}</span>
+                    <span className="text-xs text-muted-foreground">{rs.length} 条{pausedIds.has(target) && " · 已暂停"}</span>
+                  </div>
+                  <ul className="mb-3 space-y-1 text-sm">
+                    {rs.map((r) => <li key={r.id}><span className="text-muted-foreground">{names.get(r.fromMember)}：</span>{r.reason}</li>)}
+                  </ul>
+                  <div className="flex flex-wrap gap-2">
+                    <form action={dismissReports}>{hidden(target)}<Button variant="outline">驳回</Button></form>
+                    {!pausedIds.has(target) && <form action={suspendMember}>{hidden(target)}<Button variant="outline">暂停推荐</Button></form>}
+                    {pausedIds.has(target) && <form action={restoreMember}>{hidden(target)}<Button variant="outline">恢复</Button></form>}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+        <Card data-testid="suspended">
+          <CardTitle>已暂停推荐 {suspended.length}</CardTitle>
+          {suspended.length === 0 ? <p className="text-sm text-muted-foreground">没有被暂停的会员。</p> : (
+            <ul className="space-y-2">
+              {suspended.map((m) => (
+                <li key={m.id} className="flex items-center justify-between gap-2 rounded-lg border p-3">
+                  <span>{m.riotId ?? m.name}</span>
+                  <form action={restoreMember}>{hidden(m.id)}<Button variant="outline">恢复</Button></form>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+      </div>
+    </>
+  );
+}
