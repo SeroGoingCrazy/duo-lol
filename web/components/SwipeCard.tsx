@@ -7,27 +7,29 @@ import PositionIcon from "@/components/PositionIcon";
 import ScoreBadge, { ScoreHelp, scoreSummary } from "@/components/ScoreBadge";
 import { Badge } from "@/components/ui/badge";
 import { CardTitle } from "@/components/ui/card";
-import { pct, points, type Partner } from "@/lib/api";
-import type { ChampionInfo } from "@/lib/champions";
+import { useT } from "@/components/LangProvider";
+import type { DeckCard } from "@/lib/api";
+import { LANGUAGE_LABELS, PLAY_TIME_LABELS, type MemberProfile } from "@/lib/profile";
+import { championName, type ChampionInfo } from "@/lib/champions";
+import type { T } from "@/lib/i18n";
 import type { Swipe } from "@/lib/deck";
-import { POSITION_LABELS, positionLabel, tierLabel } from "@/lib/labels";
 import { cn } from "@/lib/utils";
 
 // A drag past this share of the card's width (or a quick flick) counts as a swipe; less springs back.
 const SWIPE_SHARE = 0.25;
 const FLICK_PX_PER_MS = 0.6;
-const PAGES = ["搭配评分", "英雄组合", "理由"];
+const PAGES = ["搭配评分", "英雄组合", "理由"];   // translated where shown
 
-/** The model's 理由 name positions and champions by their Riot ids; show them in Chinese. */
-function localizeReason(text: string, info: Record<string, ChampionInfo>, champions: string[]) {
-  let out = text.replace(/\b(TOP|JUNGLE|MIDDLE|BOTTOM|UTILITY)\b/g, (code) => POSITION_LABELS[code] ?? code);
-  for (const c of champions) if (info[c]) out = out.replaceAll(c, info[c].name);
+/** The model's 理由 name positions and champions by their Riot ids; show them in the page's language. */
+function localizeReason(text: string, info: Record<string, ChampionInfo>, champions: string[], t: T) {
+  let out = t.api(text).replace(/\b(TOP|JUNGLE|MIDDLE|BOTTOM|UTILITY)\b/g, (code) => t.position(code));
+  for (const c of champions) if (info[c]) out = out.replaceAll(c, championName(info, c, t.lang));
   return out;
 }
 
 /** 卡片 (CONTEXT.md): three pages flipped like Tinder's photos. Riot ID stays hidden until 互选. */
 export default function SwipeCard({ p, info, fling, onSwiped, onSwipeStart, likesYou = false }: {
-  p: Partner;
+  p: DeckCard;
   info: Record<string, ChampionInfo>;
   fling: Swipe | null;               // set by the buttons or arrow keys to throw the card out
   onSwiped: (s: Swipe) => void;
@@ -43,6 +45,7 @@ export default function SwipeCard({ p, info, fling, onSwiped, onSwipeStart, like
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const card = useRef<HTMLDivElement>(null);
   const up = p.win_rate_delta >= 0;
+  const t = useT();
 
   function leave(s: Swipe) {
     if (committed.current) return;
@@ -129,7 +132,7 @@ export default function SwipeCard({ p, info, fling, onSwiped, onSwipeStart, like
       }}
     >
       <div className="swipe-profile-header shrink-0 px-5 pb-4 pt-4 sm:px-6 sm:pb-5">
-        <div className="mb-3 grid grid-cols-3 gap-2 sm:mb-5" data-testid="card-page" aria-label="卡片详情">
+        <div className="mb-3 grid grid-cols-3 gap-2 sm:mb-5" data-testid="card-page" aria-label={t("卡片详情")}>
           {PAGES.map((name, i) => (
             <button
               key={name} type="button" aria-pressed={i === page}
@@ -137,7 +140,7 @@ export default function SwipeCard({ p, info, fling, onSwiped, onSwipeStart, like
               className={cn("cursor-pointer border-t-[3px] pb-1 pt-2 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                 i === page ? "border-primary font-semibold text-foreground" : "border-border text-muted-foreground hover:border-primary/50 hover:text-foreground")}
             >
-              {name}
+              {t(name)}
             </button>
           ))}
         </div>
@@ -146,14 +149,16 @@ export default function SwipeCard({ p, info, fling, onSwiped, onSwipeStart, like
             <PositionIcon position={p.roles.b} size={38} />
           </div>
           <div className="min-w-0 flex-1">
-            <div className="mb-1 text-xs text-muted-foreground">推荐给你的搭子</div>
-            <h2 className="text-2xl font-bold tracking-tight">{positionLabel(p.roles.b)}玩家</h2>
+            <div className="mb-1 text-xs text-muted-foreground">{t("推荐给你的搭子")}</div>
+            <h2 className="text-2xl font-bold tracking-tight">{t("{role}玩家", { role: t.position(p.roles.b) })}</h2>
             <div className="mt-2 flex flex-wrap gap-2">
-              <Badge>{tierLabel(p.tier, p.division)}</Badge>
-              {likesYou && <Badge className="gap-1 bg-good/10 text-good"><Heart className="size-3" />喜欢了你</Badge>}
+              <Badge>{t.tier(p.tier, p.division)}</Badge>
+              {likesYou && <Badge className="gap-1 bg-good/10 text-good"><Heart className="size-3" />{t("喜欢了你")}</Badge>}
+              {p.profile?.looking_now && <Badge className="gap-1 bg-good/10 text-good" data-testid="looking-badge"><span className="size-1.5 rounded-full bg-good" />{t("现在想打")}</Badge>}
             </div>
           </div>
         </div>
+        {p.profile && <ProfileLine profile={p.profile} />}
       </div>
 
       <div className="min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain px-5 py-3 sm:px-6 sm:py-5" data-testid="card-content">
@@ -161,37 +166,37 @@ export default function SwipeCard({ p, info, fling, onSwiped, onSwipeStart, like
           <>
             <div className="flex items-center justify-between gap-3">
               <div>
-                <div className="mb-2 flex items-center gap-1.5 text-sm text-muted-foreground">搭配评分 <ScoreHelp /></div>
+                <div className="mb-2 flex items-center gap-1.5 text-sm text-muted-foreground">{t("搭配评分")} <ScoreHelp /></div>
                 <ScoreBadge score={p.score} />
-                {p.score != null && <div className="mt-2 text-xs text-muted-foreground">{scoreSummary(p.score)}</div>}
+                {p.score != null && <div className="mt-2 text-xs text-muted-foreground">{scoreSummary(p.score, t)}</div>}
               </div>
               <div className="text-right">
-                <div className="text-xs text-muted-foreground">预测胜率</div>
-                <div className="win-rate text-2xl font-semibold tabular-nums">{pct(p.win_rate)}</div>
-                <div className={cn("mt-1 max-w-36 text-xs", up ? "text-good" : "text-bad")}>比单排基线平均{up ? "高" : "低"}<br />{points(p.win_rate_delta)}</div>
+                <div className="text-xs text-muted-foreground">{t("预测胜率")}</div>
+                <div className="win-rate text-2xl font-semibold tabular-nums">{t.pct(p.win_rate)}</div>
+                <div className={cn("mt-1 max-w-36 text-xs", up ? "text-good" : "text-bad")}>{t(up ? "比单排基线平均高" : "比单排基线平均低")}<br />{t.points(p.win_rate_delta)}</div>
               </div>
             </div>
             <div className="mt-3 grid grid-cols-2 gap-3 sm:mt-5" data-testid="card-roles">
-              {([["你", p.roles.a], ["TA", p.roles.b]] as const).map(([who, role]) => (
+              {([[t("你打"), p.roles.a], [t("TA 打"), p.roles.b]] as const).map(([who, role]) => (
                 <div key={who} className="min-w-0 rounded-xl bg-muted/70 p-2.5 sm:p-3">
-                  <div className="text-xs text-muted-foreground">{who}打</div>
+                  <div className="text-xs text-muted-foreground">{who}</div>
                   <div className="mt-1 font-semibold"><PositionIcon position={role} showLabel /></div>
                 </div>
               ))}
             </div>
-            <span className="sr-only">你打{positionLabel(p.roles.a)}，TA 打{positionLabel(p.roles.b)}</span>
+            <span className="sr-only">{t("你打{a}，TA 打{b}", { a: t.position(p.roles.a), b: t.position(p.roles.b) })}</span>
             {best && (
               <div className="mt-3 sm:mt-5">
                 <div className="mb-2 flex items-center justify-between sm:mb-3">
-                  <h3 className="text-xs font-medium text-muted-foreground">试试这个英雄组合</h3>
-                  <button type="button" onClick={() => setPage(1)} className="flex items-center gap-1 text-xs text-primary hover:underline">查看全部 <ArrowRight className="size-3" /></button>
+                  <h3 className="text-xs font-medium text-muted-foreground">{t("试试这个英雄组合")}</h3>
+                  <button type="button" onClick={() => setPage(1)} className="flex items-center gap-1 text-xs text-primary hover:underline">{t("查看全部")} <ArrowRight className="size-3" /></button>
                 </div>
                 <div className="flex items-center gap-3 rounded-xl border p-2.5 sm:p-3">
                   <ChampionIcon champion={best.champion_a} size={40} />
-                  <div className="min-w-0 flex-1 text-sm"><span className="block truncate font-medium">{info[best.champion_a]?.name ?? best.champion_a}</span><span className="text-xs text-muted-foreground">你</span></div>
+                  <div className="min-w-0 flex-1 text-sm"><span className="block truncate font-medium">{championName(info, best.champion_a, t.lang)}</span><span className="text-xs text-muted-foreground">{t("你")}</span></div>
                   <span className="text-muted-foreground">+</span>
                   <ChampionIcon champion={best.champion_b} size={40} />
-                  <div className="min-w-0 flex-1 text-sm"><span className="block truncate font-medium">{info[best.champion_b]?.name ?? best.champion_b}</span><span className="text-xs text-muted-foreground">TA</span></div>
+                  <div className="min-w-0 flex-1 text-sm"><span className="block truncate font-medium">{championName(info, best.champion_b, t.lang)}</span><span className="text-xs text-muted-foreground">{t("TA")}</span></div>
                 </div>
               </div>
             )}
@@ -199,26 +204,26 @@ export default function SwipeCard({ p, info, fling, onSwiped, onSwipeStart, like
         )}
         {page === 1 && (
           <>
-            <CardTitle>建议位置和最佳英雄组合</CardTitle>
-            <ChampionPairTable a="你" b="TA" roles={p.roles} pairs={p.top_pairs} info={info} />
+            <CardTitle>{t("建议位置和最佳英雄组合")}</CardTitle>
+            <ChampionPairTable a={t("你")} b={t("TA")} roles={p.roles} pairs={p.top_pairs} info={info} />
           </>
         )}
         {page === 2 && (
           <>
-            <CardTitle>为什么推荐 TA</CardTitle>
-            <p className="mb-4 mt-2 text-xs text-muted-foreground">根据位置分配与英雄组合给出的推荐理由</p>
+            <CardTitle>{t("为什么推荐 TA")}</CardTitle>
+            <p className="mb-4 mt-2 text-xs text-muted-foreground">{t("根据位置分配与英雄组合给出的推荐理由")}</p>
             <ul className="space-y-3 text-sm" data-testid="reasons">
               {p.reasons.map((r) => (
                 <li key={r} className="flex items-start gap-3 rounded-xl bg-muted/70 p-3 leading-relaxed">
                   <Check className="mt-1 size-4 shrink-0 text-primary" />
-                  {localizeReason(r, info, best ? p.top_pairs.flatMap((t) => [t.champion_a, t.champion_b]) : [])}
+                  {localizeReason(r, info, best ? p.top_pairs.flatMap((x) => [x.champion_a, x.champion_b]) : [], t)}
                 </li>
               ))}
             </ul>
           </>
         )}
       </div>
-      <div className="flex shrink-0 items-center justify-center gap-1.5 border-t px-4 py-3 text-[11px] text-muted-foreground"><LockKeyhole className="size-3" />互选后解锁 Riot ID<span className="mx-1">·</span>点左右翻页 {page + 1} / {PAGES.length}</div>
+      <div className="flex shrink-0 items-center justify-center gap-1.5 border-t px-4 py-3 text-[11px] text-muted-foreground"><LockKeyhole className="size-3" />{t("互选后解锁 Riot ID")}<span className="mx-1">·</span>{t("点左右翻页 {n} / {total}", { n: page + 1, total: PAGES.length })}</div>
 
       {hint && (
         <Badge
@@ -227,9 +232,26 @@ export default function SwipeCard({ p, info, fling, onSwiped, onSwipeStart, like
           style={{ opacity: hintOpacity }}
           aria-hidden
         >
-          {hint === "like" ? <Heart className="mr-2 size-6" /> : <X className="mr-2 size-6" />}{hint === "like" ? "喜欢" : "跳过"}
+          {hint === "like" ? <Heart className="mr-2 size-6" /> : <X className="mr-2 size-6" />}{t(hint === "like" ? "喜欢" : "跳过")}
         </Badge>
       )}
+    </div>
+  );
+}
+
+/** 简介 and the 会员's own tags under the card's title. */
+function ProfileLine({ profile }: { profile: MemberProfile }) {
+  const t = useT();
+  const tags = [
+    ...profile.languages.map((l) => LANGUAGE_LABELS[l] ?? l),
+    ...(profile.voice ? [t(profile.voice === "voice" ? "开麦" : "只打字")] : []),
+    ...profile.play_times.map((p) => t(PLAY_TIME_LABELS[p] ?? p)),
+  ];
+  if (!profile.bio && tags.length === 0) return null;
+  return (
+    <div className="mt-3 space-y-1.5" data-testid="card-profile">
+      {profile.bio && <p className="line-clamp-2 text-sm leading-snug">{profile.bio}</p>}
+      {tags.length > 0 && <p className="truncate text-xs text-muted-foreground">{tags.join(" · ")}</p>}
     </div>
   );
 }

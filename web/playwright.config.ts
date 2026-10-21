@@ -7,18 +7,23 @@ const DB = "/tmp/duo-lol-e2e.sqlite";
 const SCALE = "/tmp/duo-lol-e2e-scale.json";
 const APP_DB = "/tmp/duo-lol-e2e-app";   // PGlite directory for the app schema (lib/db)
 const chromium = "/opt/pw-browsers/chromium";
+const INTERNAL = "e2e-internal";   // DUO_INTERNAL_SECRET on both servers, as in production
 
 export default defineConfig({
   testDir: "./e2e",
   testIgnore: "**/*-ui.spec.ts",
+  workers: 1,   // the specs share one app database, and 牌堆 counts depend on who else is in the 推荐池
   timeout: 60_000,
   use: {
+    locale: "zh-CN",   // the specs read the Chinese text; english.spec.ts switches to en-US
     baseURL: "http://127.0.0.1:3100",
+    // lets tests call the Python API directly (fake icon changes); the site adds its own header server-side
+    extraHTTPHeaders: { "x-duo-internal": INTERNAL },
     launchOptions: existsSync(chromium) ? { executablePath: chromium } : {},
   },
   webServer: [
     {
-      command: `rm -f ${DB} ${SCALE} && uv run python data/fake_riot.py ${DB} && uv run python data/score_scale.py --db ${DB} --out ${SCALE} && DUO_DB=${DB} DUO_SCORE_SCALE=${SCALE} DUO_FAKE_RIOT=1 uv run uvicorn api:app --app-dir data --port 8100`,
+      command: `rm -f ${DB} ${SCALE} && uv run python data/fake_riot.py ${DB} && uv run python data/score_scale.py --db ${DB} --out ${SCALE} && DUO_DB=${DB} DUO_SCORE_SCALE=${SCALE} DUO_FAKE_RIOT=1 DUO_INTERNAL_SECRET=${INTERNAL} uv run uvicorn api:app --app-dir data --port 8100`,
       cwd: "..",
       url: "http://127.0.0.1:8100/api/champions",
       timeout: 120_000,
@@ -26,7 +31,7 @@ export default defineConfig({
     },
     {
       command: `rm -rf ${APP_DB} && npm run build && npx next start -p 3100`,
-      env: { DUO_API_URL: "http://127.0.0.1:8100", DUO_NEXT_DIST_DIR: ".next-e2e", APP_DB_DIR: APP_DB, AUTH_SECRET: "e2e-only-secret", AUTH_DEV_LOGIN: "1" },
+      env: { DUO_API_URL: "http://127.0.0.1:8100", DUO_NEXT_DIST_DIR: ".next-e2e", APP_DB_DIR: APP_DB, AUTH_SECRET: "e2e-only-secret", AUTH_DEV_LOGIN: "1", ADMIN_ACCOUNTS: "dev:admin", DUO_INTERNAL_SECRET: INTERNAL },
       url: "http://127.0.0.1:3100",
       timeout: 180_000,
       reuseExistingServer: false,

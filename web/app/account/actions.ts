@@ -6,9 +6,11 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { getDb, schema } from "@/lib/db";
+import { isBanned } from "@/lib/deckServer";
 import { riotAccount, RiotAccountError, warmPlayer } from "@/lib/riotAccount";
 import { riotIdProblem } from "@/lib/api";
 import { POSITIONS } from "@/lib/labels";
+import { bioProblem, LANGUAGES, pick, PLAY_TIMES, VOICES, type Voice } from "@/lib/profile";
 
 // Summoner icons 0-28 are the starter icons every League account owns, so anyone can switch to one.
 const STARTER_ICONS = 29;
@@ -75,8 +77,10 @@ export async function checkVerification(_: ActionState): Promise<ActionState> {
   }
   if (await boundElsewhere(account.puuid, me)) return { error: "这个 Riot 账号已经绑定了别的会员" };
 
+  // a Riot account paused under an earlier membership stays paused (PRD-v2 §8)
+  const banned = await isBanned(db, account.puuid);
   await db.update(schema.members)
-    .set({ puuid: account.puuid, riotId: account.riot_id, verifiedAt: new Date() })
+    .set({ puuid: account.puuid, riotId: account.riot_id, verifiedAt: new Date(), ...(banned ? { suspendedAt: new Date() } : {}) })
     .where(eq(schema.members.id, me));
   await db.insert(schema.memberPrefs).values({ memberId: me }).onConflictDoNothing();
   await db.delete(schema.verificationChallenges).where(eq(schema.verificationChallenges.memberId, me));
@@ -96,10 +100,19 @@ export async function savePrefs(_: ActionState, form: FormData): Promise<ActionS
   const me = await memberId();
   const positions = form.getAll("positions").map(String).filter((p) => POSITIONS.includes(p));
   if (positions.length > MAX_POSITIONS) return { error: `想打的位置最多选 ${MAX_POSITIONS} 个` };
+  const bio = String(form.get("bio") ?? "").replace(/\s+/g, " ").trim();
+  const problem = bioProblem(bio);
+  if (problem) return { error: problem };
+  const voice = String(form.get("voice") ?? "");
   const prefs = {
     positions,
+    bio,
+    languages: pick(form.getAll("languages"), LANGUAGES),
+    voice: (VOICES as readonly string[]).includes(voice) ? (voice as Voice) : null,
+    playTimes: pick(form.getAll("play_times"), PLAY_TIMES),
     recommendOptIn: form.get("recommend_opt_in") === "on",
     showDiscord: form.get("show_discord") === "on",
+    notifyDiscord: form.get("notify_discord") === "on",
   };
   const db = await getDb();
   await db.insert(schema.memberPrefs).values({ memberId: me, ...prefs })

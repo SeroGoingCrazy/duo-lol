@@ -1,6 +1,7 @@
 // The app schema (ADR-0004, PRD-v2 §7): written only by the website. The Python API owns the data schema;
 // the two meet only at members.puuid.
-import { boolean, integer, pgSchema, primaryKey, text, timestamp } from "drizzle-orm/pg-core";
+import type { DeckFilter } from "@/lib/profile";
+import { boolean, index, integer, jsonb, pgSchema, primaryKey, serial, text, timestamp } from "drizzle-orm/pg-core";
 
 export const app = pgSchema("app");
 
@@ -15,6 +16,8 @@ export const members = app.table("members", {
   riotId: text("riot_id"),
   verifiedAt: timestamp("verified_at", { mode: "date" }),
   lastActiveAt: timestamp("last_active_at", { mode: "date" }),
+  suspendedAt: timestamp("suspended_at", { mode: "date" }),   // out of every 牌堆 until an admin restores them (§8)
+  seenAt: timestamp("seen_at", { mode: "date" }),             // last opened 找搭子: 互选 and 喜欢 after this count as new
   createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
 });
 
@@ -43,7 +46,52 @@ export const memberPrefs = app.table("member_prefs", {
   positions: text("positions").array().notNull().default([]),          // 想打的位置, at most 2
   recommendOptIn: boolean("recommend_opt_in").notNull().default(false), // 同意被推荐: off until ticked
   showDiscord: boolean("show_discord").notNull().default(false),
+  notifyDiscord: boolean("notify_discord").notNull().default(false),   // 互选通知 by Discord DM, off until ticked
+  selfReport: jsonb("self_report").$type<{ tier?: string; picks: { champion: string; position: string }[] }>(),  // 自选英雄 when 数据不足
+  // 简介 and the rest of the card's profile (lib/profile.ts); never contact details, those wait for 互选
+  bio: text("bio").notNull().default(""),
+  languages: text("languages").array().notNull().default([]),
+  voice: text("voice", { enum: ["voice", "text"] }),
+  playTimes: text("play_times").array().notNull().default([]),
+  lookingUntil: timestamp("looking_until", { mode: "date" }),   // 现在想打 until then
+  deckFilter: jsonb("deck_filter").$type<DeckFilter>(),         // my own 牌堆 filters
 });
+
+const member = (name: string) => text(name).notNull().references(() => members.id, { onDelete: "cascade" });
+
+/** 喜欢 / 跳过: one row per ordered pair; undo deletes the latest 跳过. */
+export const swipes = app.table("swipes", {
+  fromMember: member("from_member"),
+  toMember: member("to_member"),
+  action: text("action", { enum: ["like", "pass"] }).notNull(),
+  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+}, (t) => [primaryKey({ columns: [t.fromMember, t.toMember] }), index("swipes_to_idx").on(t.toMember, t.action)]);
+
+/** 互选: stored once per pair with member_a < member_b. */
+export const mutualLikes = app.table("mutual_likes", {
+  memberA: member("member_a"),
+  memberB: member("member_b"),
+  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  cancelledAt: timestamp("cancelled_at", { mode: "date" }),
+}, (t) => [primaryKey({ columns: [t.memberA, t.memberB] })]);
+
+/** 拉黑: either direction hides the two from each other for good. */
+export const blocks = app.table("blocks", {
+  fromMember: member("from_member"),
+  toMember: member("to_member"),
+  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+}, (t) => [primaryKey({ columns: [t.fromMember, t.toMember] })]);
+
+/** 举报, handled by an admin: open → dismissed or suspended. */
+export const reports = app.table("reports", {
+  id: serial("id").primaryKey(),
+  fromMember: member("from_member"),
+  toMember: member("to_member"),
+  reason: text("reason").notNull(),
+  status: text("status", { enum: ["open", "dismissed", "suspended"] }).notNull().default("open"),
+  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  handledAt: timestamp("handled_at", { mode: "date" }),
+}, (t) => [index("reports_to_idx").on(t.toMember)]);
 
 /** 头像验证 in progress: the icon this 会员 was asked to wear on riot_id. */
 export const verificationChallenges = app.table("verification_challenges", {
@@ -52,4 +100,11 @@ export const verificationChallenges = app.table("verification_challenges", {
   riotId: text("riot_id").notNull(),
   iconId: integer("icon_id").notNull(),
   expiresAt: timestamp("expires_at", { mode: "date" }).notNull(),
+});
+
+/** Riot accounts an admin (or the 3-report rule) paused. Kept after 注销 so re-registering doesn't clear it;
+ *  binding the same Riot account again starts paused. */
+export const riotBans = app.table("riot_bans", {
+  puuid: text("puuid").primaryKey(),
+  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
 });

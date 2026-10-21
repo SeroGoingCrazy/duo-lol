@@ -29,7 +29,7 @@ export function saveSwipes(me: string, log: SwipeLog) {
 
 /** Demo stand-in for the other player's 喜欢: a 搭配评分 of 50 or more (a better-than-average 组合).
  *  Before the score scale is fitted, a 预测胜率 of 50% or more plays the same role. */
-export function likesYou(p: Partner) {
+export function likesYou(p: Pick<Partner, "score" | "win_rate">) {
   return p.score != null ? p.score >= 50 : p.win_rate >= 0.5;
 }
 

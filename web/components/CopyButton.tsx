@@ -1,14 +1,18 @@
 "use client";
 import { useState } from "react";
 import { Check, Copy } from "lucide-react";
+import { useT } from "@/components/LangProvider";
 import { Button } from "@/components/ui/button";
 
-export default function CopyButton({ text }: { text: string }) {
+/** Copies text; label defaults to 复制 ID, for Riot IDs. */
+export default function CopyButton({ text, label }: { text: string | (() => string); label?: string }) {
   const [done, setDone] = useState(false);
+  const t = useT();
   return (
-    <Button type="button" variant="outline" size="sm" aria-label={`复制 ${text}`}
-      onClick={() => navigator.clipboard?.writeText(text).then(() => { setDone(true); setTimeout(() => setDone(false), 1500); })}>
-      {done ? <Check /> : <Copy />}{done ? "已复制" : "复制 ID"}
+    <Button type="button" variant="outline" size="sm" aria-label={typeof text === "string" && !label ? t("复制 {id}", { id: text }) : undefined}
+      onClick={() => navigator.clipboard?.writeText(typeof text === "string" ? text : text())
+        .then(() => { setDone(true); setTimeout(() => setDone(false), 1500); })}>
+      {done ? <Check /> : <Copy />}{done ? t("已复制") : label ?? t("复制 ID")}
     </Button>
   );
 }

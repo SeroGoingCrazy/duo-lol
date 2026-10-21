@@ -2,7 +2,7 @@
 
     uv run uvicorn api:app --app-dir data --port 8000
 
-Env: DUO_DB (SQLite path, default lol_duo.sqlite), DUO_GAP_TABLE (段位差 JSON from
+Env: DUO_INTERNAL_SECRET (required on every request when set; the site sends it), DUO_DB (SQLite path, default lol_duo.sqlite), DUO_GAP_TABLE (段位差 JSON from
 evaluate.py, default data/rank_gap.json), DUO_SCORE_SCALE (搭配评分 scale from score_scale.py,
 default data/score_scale.json; fitted in the background at startup if missing), RIOT_API_KEY via .env.
 New players are fetched in a background job whose progress the site polls (PRD §5.2).
@@ -15,10 +15,14 @@ import uuid
 from contextlib import closing
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+import hmac
+
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 import db
+import player_profile
 import predict
 import recommend
 import score_scale
@@ -30,11 +34,23 @@ GAP_TABLE = predict.load_gap_table(os.environ.get("DUO_GAP_TABLE", str(Path(__fi
 SCORE_SCALE_PATH = os.environ.get("DUO_SCORE_SCALE", str(Path(__file__).parent / "score_scale.json"))
 MAX_PICKS, MAX_PICK_ROLES = 5, 2   # PRD §2.3: up to 5 自选英雄 in up to 2 positions
 MAX_DECK = 200     # 牌堆 size cap for one request
+MAX_CANDIDATES = 5000   # 会员 the site may send for one 牌堆
+MAX_EXCLUDE = 200_000   # puuids + Riot IDs of every bound 会员, hidden from the public demo
 JOB_KEEP_SECONDS = 600
 TIER_NAMES = {"IRON": "黑铁", "BRONZE": "青铜", "SILVER": "白银", "GOLD": "黄金", "PLATINUM": "铂金",
               "EMERALD": "翡翠", "DIAMOND": "钻石", "MASTER": "大师", "GRANDMASTER": "宗师", "CHALLENGER": "王者"}              # finished lookup jobs are forgotten after this long
 
 app = FastAPI(title="duo-lol")
+# Set in production (docs/deploy.md): then only the website, which sends it as X-Duo-Internal, can call this API.
+INTERNAL_SECRET = os.environ.get("DUO_INTERNAL_SECRET", "")
+
+
+@app.middleware("http")
+async def require_internal_secret(request: Request, call_next):
+    if INTERNAL_SECRET and not hmac.compare_digest(
+            request.headers.get("x-duo-internal", "").encode(), INTERNAL_SECRET.encode()):
+        return JSONResponse({"detail": "forbidden"}, status_code=403)
+    return await call_next(request)
 scale = score_scale.load_scale(SCORE_SCALE_PATH)
 jobs = {}
 jobs_lock = threading.Lock()
@@ -108,7 +124,8 @@ def player_summary(p):
     prof = p["profile"]
     return {"riot_id": p["riot_id"], "tier": p["tier"], "division": p["division"],
             "league_points": p["league_points"], "unranked": p["unranked"],
-            "games": prof["games"], "insufficient_data": prof["insufficient_data"],
+            "games": prof["games"], "wins": sum(c["wins"] for c in prof["champions"]),
+            "insufficient_data": prof["insufficient_data"],
             "champions": prof["champions"][:10]}
 
 
@@ -120,6 +137,49 @@ def get_player(riot_id: str):
     if not hit:
         raise HTTPException(404, "not cached")
     return player_summary(hit)
+
+
+RECENT_GAMES = 20
+
+
+@app.get("/api/players/{riot_id}/matches")
+def player_matches(riot_id: str):
+    """玩家资料页: a cached player's latest Solo/Duo games this season; 404 until it has been looked up."""
+    with connect() as conn:
+        row = service.cached_row(conn, riot_id)
+        if not row:
+            raise HTTPException(404, f"{riot_id} 还没有查询过")
+        puuid, name, *_, match_ids = row
+        games = player_profile.recent_games(conn, puuid, json.loads(match_ids), RECENT_GAMES)
+    return {"riot_id": name, "games": games}
+
+
+class DuoRecordPair(BaseModel):
+    a: str
+    b: str
+
+
+class DuoRecordsRequest(BaseModel):
+    pairs: list[DuoRecordPair] = Field(max_length=500)
+
+
+@app.post("/api/duo-records")
+def duo_records(req: DuoRecordsRequest):
+    """一起打的战绩 for 互选 pairs, from the games already cached for both (server-only: not on the site's proxy).
+    Any cache from this season counts, however old; a pair where either player has none gets null."""
+    this_season = time.time() - player_profile.season_start_time()
+    out, rows = [], {}
+    with connect() as conn:
+        def row(riot_id):
+            key = service.riot_id_key(riot_id)
+            if key not in rows:   # the same 会员 is usually in every pair
+                rows[key] = service.cached_row(conn, riot_id, max_age=this_season)
+            return rows[key]
+        for p in req.pairs:
+            ra, rb = row(p.a), row(p.b)
+            out.append(None if not ra or not rb else player_profile.duo_games(
+                conn, ra[0], json.loads(ra[5]), rb[0], json.loads(rb[5])))
+    return {"records": out}
 
 
 class LookupRequest(BaseModel):
@@ -266,17 +326,46 @@ def pair(req: PairRequest):
             "score": score_scale.duo_score(out["win_rate"], scale), "notes": notes}
 
 
+class Candidate(BaseModel):
+    """A 会员 the site allows in this 牌堆 (PRD-v2 §3.2 filters are applied by the site)."""
+    puuid: str
+    riot_id: str
+    self_report: SelfReport | None = None
+
+
 class RecommendRequest(BaseModel):
     riot_id: str
     self_report: SelfReport | None = None
     limit: int = Field(recommend.TOP_N, ge=1, le=MAX_DECK)   # the 牌堆 asks for the whole ranked pool
+    candidates: list[Candidate] | None = Field(None, max_length=MAX_CANDIDATES)   # None = the whole 推荐池
+    # puuids / Riot IDs never to return: the site hides its 会员 from the public demo, whose cards show Riot IDs
+    exclude: list[str] = Field(default_factory=list, max_length=MAX_EXCLUDE)
 
 
-def partner_list(conn, me, profile, limit=recommend.TOP_N):
+def candidate_reports(candidates):
+    """{puuid and Riot ID key: 自选英雄 profile} for candidates that sent one."""
+    out = {}
+    for c in candidates or []:
+        if c.self_report and c.self_report.picks:
+            picks = c.self_report.picks[:MAX_PICKS]
+            if len({p.position for p in picks}) > MAX_PICK_ROLES:
+                continue
+            try:
+                tier = service.normalize_tier(c.self_report.tier)
+            except ValueError:
+                tier = service.UNRANKED_TIER
+            prof = predict.self_reported_profile(tier, [(p.champion, p.position) for p in picks])
+            out[c.puuid] = out[service.riot_id_key(c.riot_id)] = prof
+    return out
+
+
+def partner_list(conn, me, profile, limit=recommend.TOP_N, candidates=None, exclude=()):
+    only = None if candidates is None else [(c.puuid, service.riot_id_key(c.riot_id)) for c in candidates]
     found = recommend.recommend(conn, CachedSource(OwnDataSource(conn)), {**me, "profile": profile}, GAP_TABLE,
-                                top_n=limit)
+                                top_n=limit, only=only, reports=candidate_reports(candidates),
+                                exclude={service.riot_id_key(x) if "#" in x else x for x in exclude})
     return [
-        {"riot_id": r["riot_id"], "tier": r["tier"], "division": r["division"], "win_rate": r["win_rate"],
+        {"puuid": r["puuid"], "riot_id": r["riot_id"], "tier": r["tier"], "division": r["division"], "win_rate": r["win_rate"],
          "win_rate_delta": r["win_rate_delta"], "score": score_scale.duo_score(r["win_rate"], scale),
          "roles": r["roles"], "top_pairs": [top_pair_summary(p) for p in r["top_pairs"]],
          "reasons": r["reasons"]}
@@ -284,17 +373,12 @@ def partner_list(conn, me, profile, limit=recommend.TOP_N):
     ]
 
 
-@app.get("/api/recommendations/{riot_id}")
-def recommendations(riot_id: str):
-    return recommend_for(RecommendRequest(riot_id=riot_id))
-
-
 @app.post("/api/recommendations")
 def recommend_for(req: RecommendRequest):
     """找搭子; a 数据不足 player sends 自选英雄 the same way as for /api/pair."""
     with connect() as conn:
         me, profile, note = scored_profile(conn, req.riot_id, req.self_report)
-        return {"me": player_summary(me), "partners": partner_list(conn, me, profile, req.limit),
+        return {"me": player_summary(me), "partners": partner_list(conn, me, profile, req.limit, req.candidates, req.exclude),
                 "notes": [note] if note else []}
 
 

@@ -6,8 +6,11 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { BindRiotCard, DeleteAccountCard, PrefsCard } from "@/components/AccountForms";
 import { getDb, schema } from "@/lib/db";
+import { getT } from "@/lib/lang";
 
-export const metadata: Metadata = { title: "我的账号" };
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: (await getT())("我的账号") };
+}
 
 // Summoner icons come from Data Dragon at the same patch as the vendored champion icons.
 const DDRAGON_VERSION = readFileSync(path.join(process.cwd(), "public", "champions", "VERSION"), "utf8").trim();
@@ -16,6 +19,7 @@ const iconUrl = (id: number) => `https://ddragon.leagueoflegends.com/cdn/${DDRAG
 export default async function AccountPage() {
   const me = (await auth())?.user?.id;
   if (!me) redirect("/login");
+  const t = await getT();
   const db = await getDb();
   const [member] = await db.select().from(schema.members).where(eq(schema.members.id, me));
   const [challenge] = await db.select().from(schema.verificationChallenges).where(eq(schema.verificationChallenges.memberId, me));
@@ -26,13 +30,13 @@ export default async function AccountPage() {
 
   return (
     <>
-      <h1 className="mb-1 text-2xl font-bold tracking-tight lg:text-3xl">我的账号</h1>
-      <p className="mb-5 text-sm text-muted-foreground">Discord：{member.name}</p>
+      <h1 className="mb-1 text-2xl font-bold tracking-tight lg:text-3xl">{t("我的账号")}</h1>
+      <p className="mb-5 text-sm text-muted-foreground">{t("Discord：")}{member.name}</p>
       <div className="grid gap-4 xl:grid-cols-2 xl:items-start">
         <BindRiotCard riotId={member.verifiedAt ? member.riotId : null} pending={pending} />
         <PrefsCard
           verified={!!member.verifiedAt}
-          prefs={prefs ?? { positions: [], recommendOptIn: false, showDiscord: false }}
+          prefs={prefs ?? { positions: [], recommendOptIn: false, showDiscord: false, notifyDiscord: false, bio: "", languages: [], voice: null, playTimes: [] }}
           discordName={member.name ?? ""}
         />
         <DeleteAccountCard />

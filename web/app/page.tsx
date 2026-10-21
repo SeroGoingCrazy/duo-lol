@@ -4,6 +4,7 @@ import LookupProgress from "@/components/LookupProgress";
 import PairResultView from "@/components/PairResultView";
 import RiotIdField from "@/components/RiotIdField";
 import SelfReportForm from "@/components/SelfReportForm";
+import { useT } from "@/components/LangProvider";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -12,9 +13,8 @@ import {
   type PairResult, type Player, type SelfReport,
 } from "@/lib/api";
 
-const FIRST_LOOKUP_HINT = "第一次查询的玩家大约需要 2 分钟，之后会缓存。";
-
 export default function PairPage() {
+  const t = useT();
   const [a, setA] = useState("");
   const [b, setB] = useState("");
   const [busy, setBusy] = useState(false);
@@ -80,34 +80,34 @@ export default function PairPage() {
 
   return (
     <>
-      <h1 className="mb-1 text-2xl font-bold tracking-tight lg:text-3xl">查组合</h1>
-      <p className="mb-5 text-sm text-muted-foreground">输入两个美服 Riot ID，看你们一起打单双排的搭配评分和最佳英雄组合。</p>
+      <h1 className="mb-1 text-2xl font-bold tracking-tight lg:text-3xl">{t("查组合")}</h1>
+      <p className="mb-5 text-sm text-muted-foreground">{t("输入两个美服 Riot ID，看你们一起打单双排的搭配评分和最佳英雄组合。")}</p>
 
       <Card className="mb-4">
         <form className="flex flex-wrap items-start gap-3" onSubmit={(e) => { e.preventDefault(); if (ready) load(a, b); }}>
-          <RiotIdField label="玩家 A" placeholder="Name#NA1" value={a} onChange={setA} />
-          <RiotIdField label="玩家 B" placeholder="Name#NA1" value={b} onChange={setB}
-            error={same ? "两个 Riot ID 是同一个人，请填另一位玩家" : null} />
-          <Button className="mt-5 w-full sm:w-auto" disabled={busy || !ready}>预测</Button>
+          <RiotIdField label={t("玩家 A")} placeholder="Name#NA1" value={a} onChange={setA} />
+          <RiotIdField label={t("玩家 B")} placeholder="Name#NA1" value={b} onChange={setB}
+            error={same ? t("两个 Riot ID 是同一个人，请填另一位玩家") : null} />
+          <Button className="mt-5 w-full sm:w-auto" disabled={busy || !ready}>{t("预测")}</Button>
         </form>
       </Card>
 
       <div className="flex flex-col gap-4">
-        {loadingId && <LookupProgress label={`正在读取 ${loadingId} 本赛季的单双排对局…`} hint={FIRST_LOOKUP_HINT} />}
-        {!loadingId && busy && <LookupProgress label="正在计算搭配评分…" />}
-        {error && <Alert variant="error">{error}</Alert>}
+        {loadingId && <LookupProgress label={t("正在读取 {id} 本赛季的单双排对局…", { id: loadingId })} hint={t("第一次查询的玩家大约需要 2 分钟，之后会缓存。")} />}
+        {!loadingId && busy && <LookupProgress label={t("正在计算搭配评分…")} />}
+        {error && <Alert variant="error">{t.api(error)}</Alert>}
 
         {players && pending.slice(0, 1).map((k) => (
           <SelfReportForm key={k} className="max-w-3xl" player={players[k === "a" ? 0 : 1]} champions={champions} initial={drafts[k]}
-            step={needs.length > 1 ? `第 ${needs.indexOf(k) + 1} / ${needs.length} 位玩家` : undefined}
+            step={needs.length > 1 ? t("第 {n} / {total} 位玩家", { n: needs.indexOf(k) + 1, total: needs.length }) : undefined}
             onSubmit={(r) => setReports((x) => ({ ...x, [k]: r }))} />
         ))}
 
         {result && pending.length === 0 && (
           <>
-            <PairResultView r={result} />
+            <PairResultView r={result} shareable={needs.length === 0} />
             {needs.length > 0 && (
-              <Button variant="outline" className="self-start" onClick={() => { setResult(null); setDrafts(reports); setReports({}); }}>修改自选英雄</Button>
+              <Button variant="outline" className="self-start" onClick={() => { setResult(null); setDrafts(reports); setReports({}); }}>{t("修改自选英雄")}</Button>
             )}
           </>
         )}

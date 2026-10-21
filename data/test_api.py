@@ -1,4 +1,5 @@
 """API, lookup cache and 找搭子 against the synthetic FakeRiotClient (no network)."""
+import json
 import os
 import tempfile
 import time
@@ -55,6 +56,35 @@ def test_lookup_then_cached(client):
     cached = client.get("/api/players/alpha%23na1")
     assert cached.status_code == 200 and time.monotonic() - t0 < 10   # PRD §5.2
     assert cached.json()["games"] == 40
+    assert 0 < cached.json()["wins"] < 40   # over every game, not just the top 10 champions listed
+
+
+def test_recent_games_newest_first(client):
+    assert client.get("/api/players/Ghost%23NA1/matches").status_code == 404
+    lookup(client, "Alpha#NA1")
+    out = client.get("/api/players/alpha%23na1/matches").json()
+    assert out["riot_id"] == "Alpha#NA1" and len(out["games"]) == api.RECENT_GAMES
+    times = [g["game_creation"] for g in out["games"]]
+    assert times == sorted(times, reverse=True)
+    assert set(out["games"][0]) == {"match_id", "game_creation", "game_duration", "champion", "position", "win",
+                                    "kills", "deaths", "assists", "cs"}
+
+
+def test_duo_records_count_same_team_games(client):
+    lookup(client, "Alpha#NA1"); lookup(client, "Bravo#NA1")
+    with db.connect(DB) as conn:
+        a = service.cached_row(conn, "Alpha#NA1"); b = service.cached_row(conn, "Bravo#NA1")
+        shared = set(json.loads(a[5])) & set(json.loads(b[5]))
+        together = [m for m in shared if conn.execute(
+            "SELECT COUNT(DISTINCT team_id) FROM participants WHERE match_id=? AND puuid IN (?,?)", (m, a[0], b[0])
+        ).fetchone()[0] == 1]
+    out = client.post("/api/duo-records", json={"pairs": [
+        {"a": "Alpha#NA1", "b": "Bravo#NA1"}, {"a": "Alpha#NA1", "b": "Ghost#NA1"}]}).json()["records"]
+    assert out[0]["games"] == len(together) and 0 <= out[0]["wins"] <= out[0]["games"]
+    assert out[1] is None
+    lookup(client, "DuoA#NA1"); lookup(client, "DuoB#NA1")
+    out = client.post("/api/duo-records", json={"pairs": [{"a": "DuoB#NA1", "b": "duoa#na1"}]}).json()["records"]
+    assert out[0]["games"] == fake_riot.DUO_GAMES and out[0]["wins"] == 7   # fake_riot: they lose every third game
 
 
 def test_cache_key_ignores_case_and_spacing(client):
@@ -120,7 +150,7 @@ def test_deck_returns_the_whole_ranked_pool(client):
 
 def test_recommendations_top5_duo_eligible(client):
     lookup(client, "Alpha#NA1")
-    out = client.get("/api/recommendations/Alpha%23NA1").json()
+    out = client.post("/api/recommendations", json={"riot_id": "Alpha#NA1"}).json()
     me = (out["me"]["tier"], out["me"]["division"], out["me"]["league_points"])
     with db.connect(DB) as conn:
         ranks = {riot_id: rank for _, riot_id, rank, _ in recommend.candidate_pool(conn)}
@@ -130,7 +160,7 @@ def test_recommendations_top5_duo_eligible(client):
     for p in out["partners"]:
         assert recommend.can_duo(me, ranks[p["riot_id"]])
         assert p["riot_id"] != out["me"]["riot_id"]
-        assert set(p) == {"riot_id", "tier", "division", "win_rate", "win_rate_delta", "score", "roles",
+        assert set(p) == {"puuid", "riot_id", "tier", "division", "win_rate", "win_rate_delta", "score", "roles",
                           "top_pairs", "reasons"}
         assert 1 <= len(p["top_pairs"]) <= 3
 
@@ -153,6 +183,40 @@ def test_find_partners_with_self_report(client):
     picks = [{"champion": "Ahri", "position": "MIDDLE"}]
     out = client.post("/api/recommendations", json={"riot_id": "NewTwo#NA1", "self_report": {"picks": picks}}).json()
     assert out["partners"] and any("自选英雄" in n for n in out["notes"])
+
+
+def test_deck_limited_to_candidates(client):
+    """The site sends the 会员 that pass its filters; only they are scored, matched by puuid or Riot ID."""
+    lookup(client, "Alpha#NA1")
+    pool = client.post("/api/recommendations", json={"riot_id": "Alpha#NA1", "limit": 200}).json()["partners"]
+    first, second = pool[0], pool[1]
+    stale = {"puuid": "puuid-under-an-old-key", "riot_id": second["riot_id"].upper()}
+    out = client.post("/api/recommendations", json={
+        "riot_id": "Alpha#NA1", "limit": 200,
+        "candidates": [{"puuid": first["puuid"], "riot_id": first["riot_id"]}, stale]}).json()["partners"]
+    assert [p["riot_id"] for p in out] == [first["riot_id"], second["riot_id"]]
+    empty = client.post("/api/recommendations", json={"riot_id": "Alpha#NA1", "candidates": []}).json()
+    assert empty["partners"] == []
+
+
+def test_exclude_hides_members_from_the_public_pool(client):
+    lookup(client, "Alpha#NA1")
+    pool = client.post("/api/recommendations", json={"riot_id": "Alpha#NA1", "limit": 200}).json()["partners"]
+    hide = [pool[0]["puuid"], pool[1]["riot_id"].upper()]
+    out = client.post("/api/recommendations", json={"riot_id": "Alpha#NA1", "limit": 200, "exclude": hide}).json()
+    assert [p["riot_id"] for p in out["partners"]] == [p["riot_id"] for p in pool[2:]]
+
+
+def test_deck_scores_a_data_poor_candidate_from_self_report(client):
+    lookup(client, "Alpha#NA1")
+    newbie = lookup(client, "NewThree#NA1")["player"]
+    assert newbie["insufficient_data"]
+    cand = {"puuid": "x", "riot_id": "NewThree#NA1"}
+    ask = {"riot_id": "Alpha#NA1", "limit": 200}
+    assert client.post("/api/recommendations", json={**ask, "candidates": [cand]}).json()["partners"] == []
+    cand["self_report"] = {"tier": "GOLD", "picks": [{"champion": "Ahri", "position": "MIDDLE"}]}
+    out = client.post("/api/recommendations", json={**ask, "candidates": [cand]}).json()["partners"]
+    assert [p["riot_id"] for p in out] == [newbie["riot_id"]]
 
 
 def test_score_follows_fitted_normal(client):
@@ -225,3 +289,11 @@ def test_riot_account_reports_the_current_icon(client):
     assert client.get("/api/riot-accounts/Icon Tester%23NA1").json()["profile_icon_id"] == 7
     assert client.get("/api/riot-accounts/Nobody%23NA1").status_code == 404
     assert client.get("/api/riot-accounts/no-tag").status_code == 400
+
+
+def test_internal_secret_gates_every_request(client, monkeypatch):
+    monkeypatch.setattr(api, "INTERNAL_SECRET", "s3cret")
+    assert client.get("/api/champions").status_code == 403
+    assert client.get("/api/champions", headers={"x-duo-internal": "wrong"}).status_code == 403
+    assert client.get("/api/champions", headers={"x-duo-internal": "\xe9".encode("latin-1")}).status_code == 403
+    assert client.get("/api/champions", headers={"x-duo-internal": "s3cret"}).status_code == 200
