@@ -21,7 +21,7 @@ export default async function PrivacyPage() {
           <li><b>Discord 登录</b>：你的 Discord 用户 ID 和用户名，用来登录；互选后是否给对方看用户名由你决定。我们不读取你的邮箱、好友或服务器。</li>
           <li><b>Riot 账号</b>：你绑定的 Riot ID 和 Riot 提供的账号标识（PUUID）。</li>
           <li><b>对局数据</b>：通过 Riot 官方 API 读取的美服单双排公开对局（英雄、位置、胜负、段位），用于计算预测胜率和全服统计。</li>
-          <li><b>你在网站上的操作</b>：偏好（想打的位置、是否同意被推荐、自选英雄）、喜欢和跳过、互选、拉黑和举报，以及最近一次登录时间。</li>
+          <li><b>你在网站上的操作</b>：偏好（想打的位置、简介、语言、开麦、常玩时间、是否同意被推荐、自选英雄）、喜欢和跳过、互选、拉黑和举报，以及最近一次登录时间。</li>
         </ul>
       </Card>
       <Card className="space-y-3">
@@ -29,6 +29,7 @@ export default async function PrivacyPage() {
         <ul className="list-disc space-y-1 pl-5">
           <li>预测两名玩家一起双排的胜率，并给你推荐搭子。</li>
           <li>只有双方互相喜欢（互选）后，才向对方显示你的 Riot ID 和你允许显示的 Discord 名。互选前，任何人都看不到你的 Riot ID。</li>
+          <li>如果你在偏好里勾选了互选通知，有新的互选时我们的 Discord 机器人会私信你（不含对方的名字）。</li>
           <li>处理举报、防止滥用。</li>
         </ul>
         <p>我们不出售数据，不投放广告，也不把数据交给第三方，法律要求的情况除外。</p>
@@ -62,7 +63,7 @@ function PrivacyEn() {
           <li><b>Discord login</b>: your Discord user ID and username, to log you in. You decide whether matches see the username. We don&apos;t read your email, friends or servers.</li>
           <li><b>Riot account</b>: the Riot ID you link and the account identifier (PUUID) Riot provides.</li>
           <li><b>Match data</b>: public NA Ranked Solo/Duo games read through Riot&apos;s official API (champions, roles, wins, ranks), used to predict win rates and for overall statistics.</li>
-          <li><b>What you do here</b>: preferences (roles, whether you want to be recommended, picked champions), likes and passes, matches, blocks and reports, and when you last logged in.</li>
+          <li><b>What you do here</b>: preferences (roles, bio, languages, voice, play times, whether you want to be recommended, picked champions), likes and passes, matches, blocks and reports, and when you last logged in.</li>
         </ul>
       </Card>
       <Card className="space-y-3">
@@ -70,6 +71,7 @@ function PrivacyEn() {
         <ul className="list-disc space-y-1 pl-5">
           <li>Predicting how two players do together in duo, and suggesting partners.</li>
           <li>Your Riot ID, and the Discord name if you allow it, is shown only after you both like each other (a match). Before that, nobody can see your Riot ID.</li>
+          <li>If you turn on match notifications in your preferences, our Discord bot DMs you when you get a new match (without the other player&apos;s name).</li>
           <li>Handling reports and preventing abuse.</li>
         </ul>
         <p>We don&apos;t sell data, show ads or share data with third parties, except where the law requires it.</p>

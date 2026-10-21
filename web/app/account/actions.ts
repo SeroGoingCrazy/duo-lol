@@ -112,6 +112,7 @@ export async function savePrefs(_: ActionState, form: FormData): Promise<ActionS
     playTimes: pick(form.getAll("play_times"), PLAY_TIMES),
     recommendOptIn: form.get("recommend_opt_in") === "on",
     showDiscord: form.get("show_discord") === "on",
+    notifyDiscord: form.get("notify_discord") === "on",
   };
   const db = await getDb();
   await db.insert(schema.memberPrefs).values({ memberId: me, ...prefs })

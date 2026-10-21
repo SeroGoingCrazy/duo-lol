@@ -154,6 +154,34 @@ def player_matches(riot_id: str):
     return {"riot_id": name, "games": games}
 
 
+class DuoRecordPair(BaseModel):
+    a: str
+    b: str
+
+
+class DuoRecordsRequest(BaseModel):
+    pairs: list[DuoRecordPair] = Field(max_length=500)
+
+
+@app.post("/api/duo-records")
+def duo_records(req: DuoRecordsRequest):
+    """一起打的战绩 for 互选 pairs, from the games already cached for both (server-only: not on the site's proxy).
+    Any cache from this season counts, however old; a pair where either player has none gets null."""
+    this_season = time.time() - player_profile.season_start_time()
+    out, rows = [], {}
+    with connect() as conn:
+        def row(riot_id):
+            key = service.riot_id_key(riot_id)
+            if key not in rows:   # the same 会员 is usually in every pair
+                rows[key] = service.cached_row(conn, riot_id, max_age=this_season)
+            return rows[key]
+        for p in req.pairs:
+            ra, rb = row(p.a), row(p.b)
+            out.append(None if not ra or not rb else player_profile.duo_games(
+                conn, ra[0], json.loads(ra[5]), rb[0], json.loads(rb[5])))
+    return {"records": out}
+
+
 class LookupRequest(BaseModel):
     riot_id: str
 

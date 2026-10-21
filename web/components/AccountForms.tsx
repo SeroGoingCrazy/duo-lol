@@ -83,7 +83,7 @@ export function BindRiotCard({ riotId, pending }: {
 
 /** 偏好: 想打的位置 (up to 2), 同意被推荐 (off by default) and whether 互选 shows the Discord name. */
 export type PrefsValues = {
-  positions: string[]; recommendOptIn: boolean; showDiscord: boolean;
+  positions: string[]; recommendOptIn: boolean; showDiscord: boolean; notifyDiscord: boolean;
   bio: string; languages: string[]; voice: Voice | null; playTimes: string[];
 };
 
@@ -163,6 +163,10 @@ export function PrefsCard({ verified, prefs, discordName }: {
           <label className="flex items-start gap-2 text-sm">
             <input type="checkbox" name="show_discord" defaultChecked={prefs.showDiscord} className="mt-1" />
             <span>{t("互选后给对方看我的 Discord 名（{name}）", { name: discordName })}<span className="block text-xs text-muted-foreground">{t("不勾选的话，对方只看到你的 Riot ID。")}</span></span>
+          </label>
+          <label className="flex items-start gap-2 text-sm">
+            <input type="checkbox" name="notify_discord" defaultChecked={prefs.notifyDiscord} className="mt-1" />
+            <span>{t("有新的互选时用 Discord 私信通知我")}<span className="block text-xs text-muted-foreground">{t("需要先加入网站的 Discord 服务器，机器人才能私信你。网站导航上也会显示新的互选和喜欢。")}</span></span>
           </label>
           <Button disabled={saving}>{saving ? t("保存中…") : t("保存")}</Button>
         </form>

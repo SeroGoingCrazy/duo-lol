@@ -67,6 +67,13 @@ const EN = new Map<string, string>(Object.entries({
   "格式是 名字#标签，例如 Name#NA1": "Use name#tag, for example Name#NA1",
   "复制分享链接": "Copy share link",
 
+  // 互选通知 and 一起打的战绩
+  "本赛季一起打了 {n} 局，赢 {w} 局": "{n} games together this season, {w} won",
+  "还没一起打过单双排": "No Solo/Duo games together yet",
+  "{n} 条新的互选或喜欢": "{n} new matches or likes",
+  "有新的互选时用 Discord 私信通知我": "DM me on Discord when I get a new match",
+  "需要先加入网站的 Discord 服务器，机器人才能私信你。网站导航上也会显示新的互选和喜欢。": "Join the site's Discord server first so the bot can DM you. New matches and likes also show in the site's menu.",
+
   // 玩家资料页
   "玩家资料": "Player",
   "胜率 {wr}": "{wr} win rate",
