@@ -10,6 +10,7 @@ export type Player = {
   league_points: number | null;
   unranked: boolean;
   games: number;
+  wins: number;
   insufficient_data: boolean;
   champions: ChampionStat[];
 };
@@ -108,7 +109,7 @@ export function findPartners(riotId: string, report?: SelfReport, limit?: number
 
 /** One of a player's latest Solo/Duo games, for the 玩家资料页. */
 export type RecentGame = {
-  match_id: string; game_creation: number; game_duration: number; champion: string; position: string;
+  match_id: string; game_creation: number | null; game_duration: number | null; champion: string; position: string;
   win: boolean; kills: number; deaths: number; assists: number; cs: number;
 };
 
@@ -119,6 +120,7 @@ export function recentGames(riotId: string) {
 /** /player/Name-NA1, the 玩家资料页 (op.gg-style: a tag never contains "-", so the last one splits it). */
 export function playerPath(riotId: string) {
   const i = riotId.lastIndexOf("#");
+  if (i < 0) return `/player/${encodeURIComponent(riotId.trim())}`;   // not a Riot ID: the page answers 404
   return `/player/${encodeURIComponent(riotId.slice(0, i).trim())}-${encodeURIComponent(riotId.slice(i + 1).trim())}`;
 }
 

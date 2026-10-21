@@ -9,7 +9,8 @@ import type { PairResult } from "@/lib/api";
 import { useChampionInfo } from "@/lib/useChampionInfo";
 import { cn } from "@/lib/utils";
 
-export default function PairResultView({ r }: { r: PairResult }) {
+/** shareable: the result came from the two Riot IDs alone, so ?a=&b= reproduces it (not when 自选英雄 were used). */
+export default function PairResultView({ r, shareable = true }: { r: PairResult; shareable?: boolean }) {
   const info = useChampionInfo();
   const t = useT();
   const up = r.win_rate_delta >= 0;
@@ -37,7 +38,7 @@ export default function PairResultView({ r }: { r: PairResult }) {
         <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
           <span>{t("单排基线：{a} {pa}，{b} {pb}", { a: r.a.riot_id, pa: t.pct(r.solo_baselines.a), b: r.b.riot_id, pb: t.pct(r.solo_baselines.b) })}</span>
           {/* the page keeps ?a=&b= in the address, so the link reopens this result */}
-          <CopyButton text={() => window.location.href} label={t("复制分享链接")} />
+          {shareable && <CopyButton text={() => window.location.href} label={t("复制分享链接")} />}
         </div>
       </Card>
 

@@ -124,7 +124,8 @@ def player_summary(p):
     prof = p["profile"]
     return {"riot_id": p["riot_id"], "tier": p["tier"], "division": p["division"],
             "league_points": p["league_points"], "unranked": p["unranked"],
-            "games": prof["games"], "insufficient_data": prof["insufficient_data"],
+            "games": prof["games"], "wins": sum(c["wins"] for c in prof["champions"]),
+            "insufficient_data": prof["insufficient_data"],
             "champions": prof["champions"][:10]}
 
 
@@ -145,14 +146,12 @@ RECENT_GAMES = 20
 def player_matches(riot_id: str):
     """玩家资料页: a cached player's latest Solo/Duo games this season; 404 until it has been looked up."""
     with connect() as conn:
-        row = conn.execute(
-            "SELECT puuid, riot_id, match_ids FROM player_cache WHERE riot_id_key=? ORDER BY fetched_at DESC LIMIT 1",
-            (service.riot_id_key(riot_id),),
-        ).fetchone()
+        row = service.cached_row(conn, riot_id)
         if not row:
             raise HTTPException(404, f"{riot_id} 还没有查询过")
-        games = player_profile.recent_games(conn, row[0], json.loads(row[2]), RECENT_GAMES)
-    return {"riot_id": row[1], "games": games}
+        puuid, name, *_, match_ids = row
+        games = player_profile.recent_games(conn, puuid, json.loads(match_ids), RECENT_GAMES)
+    return {"riot_id": name, "games": games}
 
 
 class LookupRequest(BaseModel):

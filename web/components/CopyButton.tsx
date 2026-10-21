@@ -9,7 +9,7 @@ export default function CopyButton({ text, label }: { text: string | (() => stri
   const [done, setDone] = useState(false);
   const t = useT();
   return (
-    <Button type="button" variant="outline" size="sm" aria-label={label ? undefined : t("复制 {id}", { id: String(text) })}
+    <Button type="button" variant="outline" size="sm" aria-label={typeof text === "string" && !label ? t("复制 {id}", { id: text }) : undefined}
       onClick={() => navigator.clipboard?.writeText(typeof text === "string" ? text : text())
         .then(() => { setDone(true); setTimeout(() => setDone(false), 1500); })}>
       {done ? <Check /> : <Copy />}{done ? t("已复制") : label ?? t("复制 ID")}

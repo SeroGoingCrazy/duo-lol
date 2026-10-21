@@ -27,19 +27,24 @@ export default function PlayerProfile({ riotId }: { riotId: string }) {
 
   useEffect(() => {
     let stale = false;
+    setPlayer(null); setGames([]); setError("");   // a client-side move to another player reuses this component
     (async () => {
+      let p: Player;
       try {
-        const p = await ensurePlayer(riotId);
-        const g = await recentGames(p.riot_id);
-        if (!stale) { setPlayer(p); setGames(g.games); }
+        p = await ensurePlayer(riotId);
       } catch (e) {
         if (!stale) setError(e instanceof ApiError ? e.message : String(e));
+        return;
       }
+      if (stale) return;
+      setPlayer(p);
+      // the profile stands on its own if only the game list fails
+      recentGames(p.riot_id).then((g) => { if (!stale) setGames(g.games); })
+        .catch((e) => { if (!stale) setError(e instanceof ApiError ? e.message : String(e)); });
     })();
     return () => { stale = true; };
   }, [riotId]);
 
-  const wins = player?.champions.reduce((n, c) => n + c.wins, 0) ?? 0;
   const same = me.includes("#") && riotIdKey(me) === riotIdKey(riotId);
   const canPair = me.trim() !== "" && !riotIdProblem(me) && !same;
 
@@ -56,7 +61,7 @@ export default function PlayerProfile({ riotId }: { riotId: string }) {
               <div className="flex flex-wrap gap-2">
                 <Badge>{t.tier(player.tier, player.division, player.league_points)}</Badge>
                 <Badge>{t("本赛季 {n} 场", { n: player.games })}</Badge>
-                {player.games > 0 && <Badge>{t("胜率 {wr}", { wr: t.pct(wins / player.games) })}</Badge>}
+                {player.games > 0 && <Badge>{t("胜率 {wr}", { wr: t.pct(player.wins / player.games) })}</Badge>}
                 {player.insufficient_data && <Badge className="text-gold">{t("数据不足")}</Badge>}
               </div>
               <CardTitle className="mt-4">{t("常用英雄")}</CardTitle>
@@ -94,8 +99,10 @@ export default function PlayerProfile({ riotId }: { riotId: string }) {
                     <div className="min-w-0 flex-1">
                       <div className="truncate font-medium">{championName(info, g.champion, t.lang)}</div>
                       <div className="text-xs text-muted-foreground">
-                        {new Date(g.game_creation).toLocaleDateString(t.lang === "en" ? "en-US" : "zh-CN", { month: "short", day: "numeric" })}
-                        {" · "}{t("{m} 分钟", { m: Math.round(g.game_duration / 60) })}
+                        {[
+                          g.game_creation && new Date(g.game_creation).toLocaleDateString(t.lang === "en" ? "en-US" : "zh-CN", { month: "short", day: "numeric" }),
+                          g.game_duration && t("{m} 分钟", { m: Math.round(g.game_duration / 60) }),
+                        ].filter(Boolean).join(" · ")}
                       </div>
                     </div>
                     <PositionIcon position={g.position} size={18} />

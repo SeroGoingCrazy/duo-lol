@@ -55,6 +55,7 @@ def test_lookup_then_cached(client):
     cached = client.get("/api/players/alpha%23na1")
     assert cached.status_code == 200 and time.monotonic() - t0 < 10   # PRD §5.2
     assert cached.json()["games"] == 40
+    assert 0 < cached.json()["wins"] < 40   # over every game, not just the top 10 champions listed
 
 
 def test_recent_games_newest_first(client):

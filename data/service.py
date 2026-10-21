@@ -42,7 +42,8 @@ def normalize_tier(tier):
     return tier
 
 
-def cached_player(conn, riot_id, max_age=CACHE_SECONDS):
+def cached_row(conn, riot_id, max_age=CACHE_SECONDS):
+    """(puuid, riot_id, tier, division, league_points, match_ids JSON) of a fresh lookup, or None."""
     row = conn.execute(
         """SELECT puuid, riot_id, tier, division, league_points, match_ids, fetched_at FROM player_cache
            WHERE riot_id_key=? ORDER BY fetched_at DESC LIMIT 1""",
@@ -50,7 +51,12 @@ def cached_player(conn, riot_id, max_age=CACHE_SECONDS):
     ).fetchone()
     if not row or time.time() - row[6] > max_age:
         return None
-    return build_player(conn, *row[:6])
+    return row[:6]
+
+
+def cached_player(conn, riot_id, max_age=CACHE_SECONDS):
+    row = cached_row(conn, riot_id, max_age)
+    return build_player(conn, *row) if row else None
 
 
 def build_player(conn, puuid, riot_id, tier, division, league_points, match_ids_json):
