@@ -37,6 +37,9 @@ MAX_DECK = 200     # 牌堆 size cap for one request
 MAX_CANDIDATES = 5000   # 会员 the site may send for one 牌堆
 MAX_EXCLUDE = 200_000   # puuids + Riot IDs of every bound 会员, hidden from the public demo
 JOB_KEEP_SECONDS = 600
+# The 自选英雄 picker lists a champion under a position once this share of its Solo/Duo games are there,
+# so Zed shows under 中单 but not under the odd support game. It only filters a list, never a prediction.
+MIN_POSITION_SHARE = 0.1
 TIER_NAMES = {"IRON": "黑铁", "BRONZE": "青铜", "SILVER": "白银", "GOLD": "黄金", "PLATINUM": "铂金",
               "EMERALD": "翡翠", "DIAMOND": "钻石", "MASTER": "大师", "GRANDMASTER": "宗师", "CHALLENGER": "王者"}              # finished lookup jobs are forgotten after this long
 
@@ -257,6 +260,13 @@ class PairRequest(BaseModel):
     b_self_report: SelfReport | None = None
 
 
+def score_fields(out):
+    """搭配评分 among 组合 in the same two positions; score_by_roles is False while that position pair
+    has too few sampled 组合 and the score falls back to all of them (score_scale.py)."""
+    return {"score": score_scale.duo_score(out["win_rate"], scale, out["roles"]),
+            "score_by_roles": bool(scale) and score_scale.compared_with(scale, out["roles"])[1]}
+
+
 def top_pair_summary(p):
     return {k: p[k] for k in ("champion_a", "champion_b", "win_rate", "pair_games")}
 
@@ -295,7 +305,7 @@ def pair(req: PairRequest):
     notes = [n for n in (note_a, note_b) if n]
     return {"a": player_summary(pa), "b": player_summary(pb), **out,
             "top_pairs": [top_pair_summary(p) for p in out["top_pairs"]],
-            "score": score_scale.duo_score(out["win_rate"], scale), "notes": notes}
+            **score_fields(out), "notes": notes}
 
 
 class Candidate(BaseModel):
@@ -338,7 +348,7 @@ def partner_list(conn, me, profile, limit=recommend.TOP_N, candidates=None, excl
                                 exclude={service.riot_id_key(x) if "#" in x else x for x in exclude})
     return [
         {"puuid": r["puuid"], "riot_id": r["riot_id"], "tier": r["tier"], "division": r["division"], "win_rate": r["win_rate"],
-         "win_rate_delta": r["win_rate_delta"], "score": score_scale.duo_score(r["win_rate"], scale),
+         "win_rate_delta": r["win_rate_delta"], **score_fields(r),
          "roles": r["roles"], "top_pairs": [top_pair_summary(p) for p in r["top_pairs"]],
          "reasons": r["reasons"]}
         for r in found
@@ -360,3 +370,21 @@ def champions():
     with connect() as conn:
         rows = conn.execute("SELECT DISTINCT champion_name FROM participants ORDER BY champion_name")
         return [r[0] for r in rows]
+
+
+@app.get("/api/champion-positions")
+def champion_positions():
+    """{champion: positions it is commonly played in, most played first}, for the picker's position tabs."""
+    with connect() as conn:
+        rows = conn.execute(
+            """SELECT champion_name, position, COUNT(*) FROM participants
+               WHERE position IN ('TOP', 'JUNGLE', 'MIDDLE', 'BOTTOM', 'UTILITY')
+               GROUP BY champion_name, position ORDER BY champion_name, COUNT(*) DESC""").fetchall()
+    games, out = {}, {}
+    for champ, _, n in rows:
+        games[champ] = games.get(champ, 0) + n
+    for champ, pos, n in rows:
+        listed = out.setdefault(champ, [])
+        if not listed or n >= MIN_POSITION_SHARE * games[champ]:
+            listed.append(pos)
+    return out

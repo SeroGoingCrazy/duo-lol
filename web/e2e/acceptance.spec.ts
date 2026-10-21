@@ -79,6 +79,20 @@ test("查组合: insufficient data falls back to self-reported champions", async
   // the picks can be changed afterwards
   await page.getByRole("button", { name: "修改自选英雄" }).click();
   await expect(page.getByRole("combobox", { name: "英雄 1", exact: true })).toContainText("九尾妖狐");
+
+  // the picker opens on the row's position and lists only champions commonly played there
+  await page.getByRole("combobox", { name: "英雄 1", exact: true }).click();
+  const tabs = page.getByTestId("champion-position-tabs");
+  await expect(tabs.getByRole("tab", { name: "中单" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("option", { name: /九尾妖狐/ })).toBeVisible();
+  await expect(page.getByRole("option", { name: /盲僧/ })).toHaveCount(0);
+  await tabs.getByRole("tab", { name: "打野" }).click();
+  await expect(page.getByRole("option", { name: /盲僧/ })).toBeVisible();
+  await expect(page.getByRole("option", { name: /九尾妖狐/ })).toHaveCount(0);
+  // typing a name searches every position
+  await page.getByRole("combobox", { name: "英雄 1 搜索" }).fill("Ahri");
+  await expect(tabs.getByRole("tab", { name: "全部" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("option", { name: /九尾妖狐/ })).toBeVisible();
 });
 
 test("查组合: the same player twice is caught before submitting", async ({ page }) => {
