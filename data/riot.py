@@ -114,5 +114,10 @@ class RiotClient:
         entries = self.get(f"{PLATFORM}/lol/league/v4/entries/by-puuid/{puuid}") or []
         return next((e for e in entries if e.get("queueType") == SOLO_QUEUE), None)
 
+    def profile_icon(self, puuid):
+        """The summoner icon id the player has on right now (头像验证, ADR-0005)."""
+        summoner = self.get(f"{PLATFORM}/lol/summoner/v4/summoners/by-puuid/{puuid}")
+        return summoner["profileIconId"] if summoner else None
+
     def match(self, match_id):
         return self.get(f"{REGION}/lol/match/v5/matches/{match_id}")

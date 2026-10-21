@@ -29,6 +29,7 @@ DB_PATH = os.environ.get("DUO_DB", "lol_duo.sqlite")
 GAP_TABLE = predict.load_gap_table(os.environ.get("DUO_GAP_TABLE", str(Path(__file__).parent / "rank_gap.json")))
 SCORE_SCALE_PATH = os.environ.get("DUO_SCORE_SCALE", str(Path(__file__).parent / "score_scale.json"))
 MAX_PICKS, MAX_PICK_ROLES = 5, 2   # PRD §2.3: up to 5 自选英雄 in up to 2 positions
+MAX_DECK = 200     # 牌堆 size cap for one request
 JOB_KEEP_SECONDS = 600
 TIER_NAMES = {"IRON": "黑铁", "BRONZE": "青铜", "SILVER": "白银", "GOLD": "黄金", "PLATINUM": "铂金",
               "EMERALD": "翡翠", "DIAMOND": "钻石", "MASTER": "大师", "GRANDMASTER": "宗师", "CHALLENGER": "王者"}              # finished lookup jobs are forgotten after this long
@@ -175,6 +176,38 @@ def lookup_status(job_id: str):
     return job
 
 
+@app.get("/api/riot-accounts/{riot_id}")
+def riot_account(riot_id: str):
+    """Who a Riot ID is and the icon they wear right now, read fresh from Riot for 头像验证 (ADR-0005).
+    The site compares profile_icon_id with the icon it asked for; nothing is cached or stored here."""
+    try:
+        name, tag = service.parse_riot_id(riot_id)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    client = riot_client()
+    try:
+        account = client.account_by_riot_id(name, tag)
+        icon = client.profile_icon(account["puuid"]) if account else None
+    except Exception as e:
+        raise HTTPException(502, friendly_error(e))
+    if not account or icon is None:
+        raise HTTPException(404, f"找不到 {riot_id}，请检查名字和 # 后面的标签")
+    return {"puuid": account["puuid"], "riot_id": f"{account['gameName']}#{account['tagLine']}",
+            "profile_icon_id": icon}
+
+
+if os.environ.get("DUO_FAKE_RIOT"):
+    class FakeIcon(BaseModel):
+        riot_id: str
+        icon: int
+
+    @app.post("/api/fake/icon")
+    def fake_set_icon(req: FakeIcon):
+        """End-to-end tests only: stands in for the player changing their icon in the client."""
+        riot_client().set_icon(*service.parse_riot_id(req.riot_id), req.icon)
+        return {"ok": True}
+
+
 class Pick(BaseModel):
     champion: str
     position: str
@@ -236,10 +269,12 @@ def pair(req: PairRequest):
 class RecommendRequest(BaseModel):
     riot_id: str
     self_report: SelfReport | None = None
+    limit: int = Field(recommend.TOP_N, ge=1, le=MAX_DECK)   # the 牌堆 asks for the whole ranked pool
 
 
-def partner_list(conn, me, profile):
-    found = recommend.recommend(conn, CachedSource(OwnDataSource(conn)), {**me, "profile": profile}, GAP_TABLE)
+def partner_list(conn, me, profile, limit=recommend.TOP_N):
+    found = recommend.recommend(conn, CachedSource(OwnDataSource(conn)), {**me, "profile": profile}, GAP_TABLE,
+                                top_n=limit)
     return [
         {"riot_id": r["riot_id"], "tier": r["tier"], "division": r["division"], "win_rate": r["win_rate"],
          "win_rate_delta": r["win_rate_delta"], "score": score_scale.duo_score(r["win_rate"], scale),
@@ -259,7 +294,7 @@ def recommend_for(req: RecommendRequest):
     """找搭子; a 数据不足 player sends 自选英雄 the same way as for /api/pair."""
     with connect() as conn:
         me, profile, note = scored_profile(conn, req.riot_id, req.self_report)
-        return {"me": player_summary(me), "partners": partner_list(conn, me, profile),
+        return {"me": player_summary(me), "partners": partner_list(conn, me, profile, req.limit),
                 "notes": [note] if note else []}
 
 

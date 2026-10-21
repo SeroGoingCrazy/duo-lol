@@ -109,6 +109,15 @@ def test_insufficient_data_falls_back_to_self_report(client):
     assert r.status_code == 400
 
 
+def test_deck_returns_the_whole_ranked_pool(client):
+    lookup(client, "Alpha#NA1")
+    top5 = client.post("/api/recommendations", json={"riot_id": "Alpha#NA1"}).json()["partners"]
+    deck = client.post("/api/recommendations", json={"riot_id": "Alpha#NA1", "limit": 200}).json()["partners"]
+    assert len(deck) >= len(top5)
+    assert deck[:len(top5)] == top5
+    assert client.post("/api/recommendations", json={"riot_id": "Alpha#NA1", "limit": 0}).status_code == 422
+
+
 def test_recommendations_top5_duo_eligible(client):
     lookup(client, "Alpha#NA1")
     out = client.get("/api/recommendations/Alpha%23NA1").json()
@@ -207,3 +216,12 @@ def test_parse_riot_id():
     assert service.parse_riot_id("a#b#NA1") == ("a#b", "NA1")
     with pytest.raises(ValueError):
         service.parse_riot_id("Faker")
+
+
+def test_riot_account_reports_the_current_icon(client):
+    first = client.get("/api/riot-accounts/Icon Tester%23NA1").json()
+    assert first["riot_id"] == "Icon Tester#NA1" and 0 <= first["profile_icon_id"] < 29
+    client.post("/api/fake/icon", json={"riot_id": "Icon Tester#NA1", "icon": 7})
+    assert client.get("/api/riot-accounts/Icon Tester%23NA1").json()["profile_icon_id"] == 7
+    assert client.get("/api/riot-accounts/Nobody%23NA1").status_code == 404
+    assert client.get("/api/riot-accounts/no-tag").status_code == 400

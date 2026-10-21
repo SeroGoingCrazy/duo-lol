@@ -95,31 +95,65 @@ test("Riot ID without a tag explains the format", async ({ page }) => {
   await expect(page.getByText("格式是 名字#标签")).toBeVisible();
 });
 
-// PRD §5.3: the 5 partners with the highest predicted win rate, Riot ID only.
-test("找搭子: top 5 partners", async ({ page }) => {
+// PRD §5.3 and PRD-v2 §3.2: the 牌堆 deals partners highest 预测胜率 first, one 卡片 at a time.
+test("找搭子: swipe deck, pages, undo and 互选", async ({ page }) => {
   await page.goto("/find");
   await page.getByLabel("你的 Riot ID").fill("Charlie#NA1");
-  await page.getByRole("button", { name: "找搭子" }).click();
-  const items = page.getByTestId("partners").locator(":scope > li");
-  await expect(items.first()).toBeVisible({ timeout: 45_000 });
-  expect(await items.count()).toBeLessThanOrEqual(5);
-  const rates = await items.locator(".win-rate").allInnerTexts();
-  const nums = rates.map((r) => parseFloat(r));
-  expect(nums).toEqual([...nums].sort((x, y) => y - x));
-  await expect(items.first().locator("[data-champion]")).toHaveCount(2);
-  await expect(items.first().getByRole("button", { name: /复制/ })).toBeVisible();
+  await page.getByRole("button", { name: "开始滑卡" }).click();
+  const card = page.getByTestId("swipe-card");
+  await expect(card).toBeVisible({ timeout: 45_000 });
+
+  // page 1: score and positions; the Riot ID stays hidden until 互选
+  await expect(card.getByTestId("score")).toBeVisible();
+  await expect(card.getByTestId("card-roles").locator("[data-position]")).toHaveCount(2);
+  await expect(card).not.toContainText("#");
+  const first = parseFloat(await card.locator(".win-rate").innerText());
+
+  // tapping the right half flips to 英雄组合, then 理由
+  const box = (await card.boundingBox())!;
+  await page.mouse.click(box.x + box.width * 0.8, box.y + box.height * 0.5);
+  await expect(card.getByTestId("top-pairs")).toBeVisible();
+  await page.mouse.click(box.x + box.width * 0.8, box.y + box.height * 0.5);
+  expect(await card.getByTestId("reasons").locator("li").count()).toBeGreaterThanOrEqual(3);
+
+  // ← 跳过: the next card is not better than the first; 撤销 brings the first back
+  await page.keyboard.press("ArrowLeft");
+  await expect(card.locator(".win-rate")).not.toHaveText(`${first.toFixed(1)}%`);
+  expect(parseFloat(await card.locator(".win-rate").innerText())).toBeLessThanOrEqual(first);
+  await page.getByRole("button", { name: "撤销上一次跳过" }).click();
+  await expect(card.locator(".win-rate")).toHaveText(`${first.toFixed(1)}%`);
+
+  // 喜欢 someone from 喜欢我的人: that is a 互选, which reveals the Riot ID
+  await page.getByRole("tab", { name: /喜欢我的人/ }).click();
+  const likes = page.getByTestId("likes-list").locator("li");
+  await expect(likes.first()).toBeVisible();
+  await likes.first().click();
+  await expect(card.getByText("喜欢了你")).toBeVisible();
+  await page.getByRole("button", { name: "喜欢", exact: true }).click();
+  const dialog = page.getByTestId("match-dialog");
+  await expect(dialog).toBeVisible();
+  const riotId = await dialog.getByTestId("match-riot-id").innerText();
+  expect(riotId).toContain("#");
+  await dialog.getByRole("button", { name: "继续滑" }).click();
+  await page.getByRole("tab", { name: /互选/ }).click();
+  await expect(page.getByTestId("mutual-list")).toContainText(riotId);
+
+  // swipes are kept in this browser: a reload shows the same 互选
+  await page.reload();
+  await expect(card).toBeVisible({ timeout: 45_000 });
+  await expect(page.getByTestId("mutual-list")).toContainText(riotId);
 });
 
 test("找搭子: insufficient data asks for self-reported champions", async ({ page }) => {
   await page.goto("/find");
   await page.getByLabel("你的 Riot ID").fill("NewTwo#NA1");
-  await page.getByRole("button", { name: "找搭子" }).click();
+  await page.getByRole("button", { name: "开始滑卡" }).click();
   await expect(page.getByTestId("self-report")).toBeVisible({ timeout: 30_000 });
   await expect(page.locator(".error[role=alert]")).toHaveCount(0);
   await pickChampion(page, 1, "garen", "德玛西亚之力");
   await pickPosition(page, 1, "上单");
   await page.getByRole("button", { name: "用这些英雄估算" }).click();
-  await expect(page.getByTestId("partners").locator(":scope > li").first()).toBeVisible({ timeout: 45_000 });
+  await expect(page.getByTestId("swipe-card")).toBeVisible({ timeout: 45_000 });
 });
 
 test("unknown Riot ID shows an error", async ({ page }) => {

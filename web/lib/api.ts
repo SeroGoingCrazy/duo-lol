@@ -41,6 +41,7 @@ export type Partner = {
   score: number | null;
   roles: { a: string; b: string };
   top_pairs: ChampionPair[];
+  reasons: string[];
 };
 
 export type Pick = { champion: string; position: string };
@@ -96,10 +97,11 @@ export function predictPair(a: string, b: string, aReport?: SelfReport, bReport?
   });
 }
 
-export function findPartners(riotId: string, report?: SelfReport) {
+/** 找搭子; limit = DECK_SIZE gives the whole ranked 牌堆 instead of the top 5. */
+export function findPartners(riotId: string, report?: SelfReport, limit?: number) {
   return call<{ me: Player; partners: Partner[]; notes: string[] }>("/api/recommendations", {
     method: "POST",
-    body: JSON.stringify({ riot_id: riotId, self_report: report ?? null }),
+    body: JSON.stringify({ riot_id: riotId, self_report: report ?? null, limit: limit ?? 5 }),
   });
 }
 
