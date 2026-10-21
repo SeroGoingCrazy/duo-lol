@@ -19,6 +19,10 @@ $env:DUO_ENV = Join-Path $Root ".env"
 $env:PYTHONIOENCODING = "utf-8"
 $python = Join-Path $Root ".venv\Scripts\python.exe"
 $collect = Join-Path $PSScriptRoot "..\data\collect.py"
+if ($Postgres -and -not (Select-String -Path $env:DUO_ENV -Pattern '^\s*DATABASE_URL\s*=\s*\S' -Quiet)) {
+    "$(Get-Date -Format s) -Postgres needs DATABASE_URL in $($env:DUO_ENV); not running" | Out-File $log -Append -Encoding utf8
+    exit 1
+}
 $db = if ($Postgres) { @() } else { @("--db", (Join-Path $Root "lol_duo.sqlite")) }
 
 "$(Get-Date -Format s) run started" | Out-File $log -Append -Encoding utf8

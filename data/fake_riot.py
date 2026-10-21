@@ -136,6 +136,12 @@ class FakeRiotClient:
 def seed(db_path, tiers=("SILVER", "GOLD", "PLATINUM"), players_per_tier=8):
     """Build a synthetic 推荐池 database for the end-to-end run: uv run python data/fake_riot.py PATH"""
     import collect
+    import db
+
+    if db.is_url(db_path):   # never seed on top of real data (or an earlier run's)
+        with db.connect(db_path) as conn:
+            if conn.execute("SELECT 1 FROM matches LIMIT 1").fetchone():
+                raise SystemExit("fake_riot: that Postgres database already has matches; use an empty one")
 
     class Args:
         db = db_path; matches_per_player = 20; seed = 1; season_start = "2026-01-08"

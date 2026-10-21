@@ -3,7 +3,8 @@ import { existsSync } from "node:fs";
 
 // End-to-end run against a synthetic database and the fake Riot client (data/fake_riot.py):
 // no Riot key or network needed. Covers PRD §5 acceptance criteria 2 and 3.
-// DUO_E2E_DB=postgresql://... runs the Python side on an empty Postgres database instead.
+// DUO_E2E_DB=postgresql://... runs the Python side on Postgres instead; the database must be empty
+// (fake_riot.py refuses otherwise), so create a new one for each run.
 const DB = process.env.DUO_E2E_DB ?? "/tmp/duo-lol-e2e.sqlite";
 const SCALE = "/tmp/duo-lol-e2e-scale.json";
 const APP_DB = "/tmp/duo-lol-e2e-app";   // PGlite directory for the app schema (lib/db)

@@ -15,20 +15,16 @@ from pathlib import Path
 
 import db
 
-TABLES = ["players", "matches", "participants", "player_cache", "ladder", "ladder_progress",
-          "key_epoch", "rekeyed", "seed_progress"]
-
-
 def copy(src, dst, log=print):
     """Copy every table from the SQLite file src into the Postgres URL dst; returns {table: rows}."""
     lite = sqlite3.connect(Path(src).resolve().as_uri() + "?mode=ro", uri=True)
     pg = db.connect(dst)
     try:
-        full = [t for t in TABLES if pg.execute(f"SELECT 1 FROM {t} LIMIT 1").fetchone()]
+        full = [t for t in db.TABLES if pg.execute(f"SELECT 1 FROM {t} LIMIT 1").fetchone()]
         if full:
             raise SystemExit(f"Postgres already has data in {', '.join(full)}; not copying over it")
         counts = {}
-        for table in TABLES:
+        for table in db.TABLES:
             cols = [r[1] for r in lite.execute(f"PRAGMA table_info({table})")]
             if not cols:   # made before this table existed
                 continue
