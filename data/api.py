@@ -2,7 +2,7 @@
 
     uv run uvicorn api:app --app-dir data --port 8000
 
-Env: DUO_DB (SQLite path, default lol_duo.sqlite), DUO_GAP_TABLE (段位差 JSON from
+Env: DUO_INTERNAL_SECRET (required on every request when set; the site sends it), DUO_DB (SQLite path, default lol_duo.sqlite), DUO_GAP_TABLE (段位差 JSON from
 evaluate.py, default data/rank_gap.json), DUO_SCORE_SCALE (搭配评分 scale from score_scale.py,
 default data/score_scale.json; fitted in the background at startup if missing), RIOT_API_KEY via .env.
 New players are fetched in a background job whose progress the site polls (PRD §5.2).
@@ -15,7 +15,10 @@ import uuid
 from contextlib import closing
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+import hmac
+
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 import db
@@ -37,6 +40,15 @@ TIER_NAMES = {"IRON": "黑铁", "BRONZE": "青铜", "SILVER": "白银", "GOLD": 
               "EMERALD": "翡翠", "DIAMOND": "钻石", "MASTER": "大师", "GRANDMASTER": "宗师", "CHALLENGER": "王者"}              # finished lookup jobs are forgotten after this long
 
 app = FastAPI(title="duo-lol")
+# Set in production (docs/deploy.md): then only the website, which sends it as X-Duo-Internal, can call this API.
+INTERNAL_SECRET = os.environ.get("DUO_INTERNAL_SECRET", "")
+
+
+@app.middleware("http")
+async def require_internal_secret(request: Request, call_next):
+    if INTERNAL_SECRET and not hmac.compare_digest(request.headers.get("x-duo-internal", ""), INTERNAL_SECRET):
+        return JSONResponse({"detail": "forbidden"}, status_code=403)
+    return await call_next(request)
 scale = score_scale.load_scale(SCORE_SCALE_PATH)
 jobs = {}
 jobs_lock = threading.Lock()

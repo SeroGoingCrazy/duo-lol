@@ -259,3 +259,10 @@ def test_riot_account_reports_the_current_icon(client):
     assert client.get("/api/riot-accounts/Icon Tester%23NA1").json()["profile_icon_id"] == 7
     assert client.get("/api/riot-accounts/Nobody%23NA1").status_code == 404
     assert client.get("/api/riot-accounts/no-tag").status_code == 400
+
+
+def test_internal_secret_gates_every_request(client, monkeypatch):
+    monkeypatch.setattr(api, "INTERNAL_SECRET", "s3cret")
+    assert client.get("/api/champions").status_code == 403
+    assert client.get("/api/champions", headers={"x-duo-internal": "wrong"}).status_code == 403
+    assert client.get("/api/champions", headers={"x-duo-internal": "s3cret"}).status_code == 200
