@@ -38,10 +38,18 @@ export default function Nav({ member }: { member: { name: string; admin?: boolea
       {item("/", t("查组合"))}
       {item("/find", t("找搭子"), path === "/find" ? 0 : unseen)}
       <div className="ml-auto flex items-center gap-1">
-        <form action={setLang.bind(null, t.lang === "en" ? "zh" : "en")}>
-          <button className="cursor-pointer rounded-md px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
-            lang={t.lang === "en" ? "zh-CN" : "en"} data-testid="lang-switch">{t.lang === "en" ? "中文" : "English"}</button>
-        </form>
+        {/* both languages always visible, the current one highlighted */}
+        <div role="group" aria-label="语言 / Language" className="mr-2 flex rounded-lg border p-0.5" data-testid="lang-switch">
+          {([["zh", "中文", "zh-CN"], ["en", "English", "en"]] as const).map(([code, label, tag]) => (
+            <form key={code} action={setLang.bind(null, code)}>
+              <button lang={tag} aria-pressed={t.lang === code} disabled={t.lang === code}
+                className={cn("rounded-md px-2.5 py-1 text-xs transition-colors",
+                  t.lang === code ? "bg-accent font-semibold text-foreground" : "cursor-pointer text-muted-foreground hover:text-foreground")}>
+                {label}
+              </button>
+            </form>
+          ))}
+        </div>
         {member ? (
           <>
             {member.admin && item("/admin", t("管理"))}
