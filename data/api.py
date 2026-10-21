@@ -2,7 +2,7 @@
 
     uv run uvicorn api:app --app-dir data --port 8000
 
-Env: DUO_INTERNAL_SECRET (required on every request when set; the site sends it), DUO_DB (SQLite path, default lol_duo.sqlite), DUO_GAP_TABLE (段位差 JSON from
+Env: DUO_INTERNAL_SECRET (required on every request when set; the site sends it), DUO_DB (SQLite path or Postgres URL; else DATABASE_URL, else lol_duo.sqlite), DUO_GAP_TABLE (段位差 JSON from
 evaluate.py, default data/rank_gap.json), DUO_SCORE_SCALE (搭配评分 scale from score_scale.py,
 default data/score_scale.json; fitted in the background at startup if missing), RIOT_API_KEY via .env.
 New players are fetched in a background job whose progress the site polls (PRD §5.2).
@@ -29,9 +29,10 @@ import score_scale
 import service
 from stats_source import CachedSource, OwnDataSource
 
-DB_PATH = os.environ.get("DUO_DB", "lol_duo.sqlite")
+DB_PATH = db.default_target()
 GAP_TABLE = predict.load_gap_table(os.environ.get("DUO_GAP_TABLE", str(Path(__file__).parent / "rank_gap.json")))
 SCORE_SCALE_PATH = os.environ.get("DUO_SCORE_SCALE", str(Path(__file__).parent / "score_scale.json"))
+SCALE_REFIT_SECONDS = 24 * 3600   # the dev key's daily collection; a production key would collect more often
 MAX_PICKS, MAX_PICK_ROLES = 5, 2   # PRD §2.3: up to 5 自选英雄 in up to 2 positions
 MAX_DECK = 200     # 牌堆 size cap for one request
 MAX_CANDIDATES = 5000   # 会员 the site may send for one 牌堆
@@ -62,7 +63,7 @@ _client_lock = threading.Lock()
 
 
 def connect():
-    """Fresh connection per request; SQLite connections are not shared across threads."""
+    """Fresh connection per request; connections are not shared across threads."""
     return closing(db.connect(DB_PATH))
 
 
@@ -81,12 +82,12 @@ def riot_client():
 
 
 @app.on_event("startup")
-def fit_score_scale_if_missing():
-    """Without a saved scale, fit one from the database in the background; scores are None until then."""
-    if scale:
-        return
+def keep_score_scale_fresh():
+    """Without a saved scale, fit one from the database in the background; scores are None until then.
+    The collector adds data every day, so a scale older than SCALE_REFIT_SECONDS is refitted while
+    the old one keeps serving."""
 
-    def run():
+    def refit():
         global scale
         conn = db.connect(DB_PATH)
         try:
@@ -100,6 +101,16 @@ def fit_score_scale_if_missing():
                     json.dump(fitted, f, indent=2)
             except OSError:
                 pass   # read-only checkout: keep it in memory only
+
+    def run():
+        if scale:
+            time.sleep(max(0, scale.get("fitted_at", 0) + SCALE_REFIT_SECONDS - time.time()))
+        while True:
+            try:
+                refit()
+            except Exception as e:   # e.g. the database is briefly unreachable; try again next time
+                print(f"score scale fit failed: {type(e).__name__}", flush=True)
+            time.sleep(SCALE_REFIT_SECONDS)
 
     threading.Thread(target=run, daemon=True).start()
 

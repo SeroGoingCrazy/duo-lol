@@ -1,4 +1,4 @@
-# pytest, type check and the Playwright end-to-end run on every push and pull request.
+# pytest (on SQLite and on Postgres), type check and the Playwright end-to-end run on every push and pull request.
 # Uses the synthetic data in data/fake_riot.py, so no Riot key or secret is needed.
 name: ci
 on:
@@ -10,11 +10,21 @@ jobs:
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    services:
+      postgres:   # the Python tests run a second time on Postgres, as in production (Neon)
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: ci
+        ports: ["5432:5432"]
+        options: --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
       - run: uv sync
       - run: uv run pytest -q
+      - run: uv run pytest -q
+        env:
+          DUO_TEST_DATABASE_URL: postgresql://postgres:ci@localhost:5432/postgres
       - uses: actions/setup-node@v4
         with:
           node-version: 22

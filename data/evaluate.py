@@ -154,7 +154,7 @@ def fit_gap_table(residuals):
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("--db", default="lol_duo.sqlite")
+    ap.add_argument("--db", default=db.default_target(), help="SQLite path or Postgres URL (default: DUO_DB, DATABASE_URL)")
     ap.add_argument("--out", help="write the fitted 段位差 table here as JSON")
     args = ap.parse_args()
     conn = db.connect(args.db)

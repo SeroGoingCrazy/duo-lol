@@ -45,7 +45,7 @@ def check(conn, client, log=print):
         same = True    # nothing to compare against yet (empty database)
     if latest and same:
         return latest
-    before = 0 if same else conn.execute("SELECT COALESCE(MAX(rowid), 0) FROM matches").fetchone()[0]
+    before = 0 if same else conn.execute(f"SELECT COALESCE(MAX({db.match_order(conn)}), 0) FROM matches").fetchone()[0]
     conn.execute("INSERT INTO key_epoch (probes, matches_before, started_at, done) VALUES (?,?,?,?)",
                  (json.dumps(fresh), before, int(time.time()), int(before == 0)))
     conn.commit()
@@ -59,10 +59,11 @@ def migrate(conn, client, epoch, log=print):
     epoch_id, before, _, done = epoch
     if done:
         return
+    seq = db.match_order(conn)
     todo = [r[0] for r in conn.execute(
-        """SELECT match_id FROM matches m WHERE rowid <= ?
-             AND NOT EXISTS (SELECT 1 FROM rekeyed r WHERE r.match_id = m.match_id AND r.epoch = ?)
-           ORDER BY rowid""", (before, epoch_id))]
+        f"""SELECT match_id FROM matches m WHERE {seq} <= ?
+              AND NOT EXISTS (SELECT 1 FROM rekeyed r WHERE r.match_id = m.match_id AND r.epoch = ?)
+            ORDER BY {seq}""", (before, epoch_id))]
     log(f"[key] re-keying {len(todo)} matches")
     for i, mid in enumerate(todo, 1):
         old = dict(conn.execute("SELECT champion_name, puuid FROM participants WHERE match_id=?", (mid,)))
@@ -72,7 +73,8 @@ def migrate(conn, client, epoch, log=print):
             for p in match["info"]["participants"]:
                 if old.get(p["championName"]) not in (None, p["puuid"]):
                     move_player(conn, old[p["championName"]], p["puuid"])
-        conn.execute("INSERT OR REPLACE INTO rekeyed VALUES (?,?)", (mid, epoch_id))
+        conn.execute("INSERT INTO rekeyed VALUES (?,?) ON CONFLICT(match_id) DO UPDATE SET epoch=excluded.epoch",
+                     (mid, epoch_id))
         if i % 20 == 0 or i == len(todo):
             conn.commit()
         if i % 500 == 0:
@@ -93,12 +95,14 @@ def move_player(conn, old, new):
            SELECT ?, riot_id, tier, division, league_points, wins, losses, sampled_at, recommend_opt_in
              FROM players WHERE puuid=? AND true
            ON CONFLICT(puuid) DO UPDATE SET
-             tier=COALESCE(excluded.tier, tier), division=COALESCE(excluded.division, division),
-             league_points=COALESCE(excluded.league_points, league_points),
-             wins=COALESCE(excluded.wins, wins), losses=COALESCE(excluded.losses, losses),
-             sampled_at=COALESCE(excluded.sampled_at, sampled_at),
-             recommend_opt_in=MAX(excluded.recommend_opt_in, recommend_opt_in)""", (new, old))
+             tier=COALESCE(excluded.tier, players.tier), division=COALESCE(excluded.division, players.division),
+             league_points=COALESCE(excluded.league_points, players.league_points),
+             wins=COALESCE(excluded.wins, players.wins), losses=COALESCE(excluded.losses, players.losses),
+             sampled_at=COALESCE(excluded.sampled_at, players.sampled_at),
+             recommend_opt_in=CASE WHEN excluded.recommend_opt_in = 1 THEN 1 ELSE players.recommend_opt_in END""",
+        (new, old))
     conn.execute("DELETE FROM players WHERE puuid=?", (old,))
-    conn.execute("UPDATE OR REPLACE seed_progress SET puuid=? WHERE puuid=?", (new, old))
-    conn.execute("UPDATE OR REPLACE ladder SET puuid=? WHERE puuid=?", (new, old))
+    for table in ("seed_progress", "ladder"):   # the old PUUID's row replaces any under the new one
+        conn.execute(f"DELETE FROM {table} WHERE puuid=? AND EXISTS (SELECT 1 FROM {table} WHERE puuid=?)", (new, old))
+        conn.execute(f"UPDATE {table} SET puuid=? WHERE puuid=?", (new, old))
     conn.execute("DELETE FROM player_cache WHERE puuid=?", (old,))   # the next lookup refetches it

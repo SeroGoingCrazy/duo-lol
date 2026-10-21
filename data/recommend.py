@@ -82,7 +82,7 @@ def candidate_pool(conn, require_opt_in=False, include_unranked=False):
               FROM players pl
               JOIN participants p ON p.puuid = pl.puuid
               JOIN matches m ON m.match_id = p.match_id
-              WHERE pl.tier IS NOT NULL AND pl.riot_id IS NOT NULL {opt})
+              WHERE pl.tier IS NOT NULL AND pl.riot_id IS NOT NULL {opt}) AS recent
             WHERE n <= ?""",
         (player_profile.MAX_GAMES,),
     )

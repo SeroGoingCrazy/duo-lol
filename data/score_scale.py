@@ -99,7 +99,7 @@ def fit(conn, gap_table=None, sample_pairs=SAMPLE_PAIRS, seed=0, max_pairs=MAX_S
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("--db", default="lol_duo.sqlite")
+    ap.add_argument("--db", default=db.default_target(), help="SQLite path or Postgres URL (default: DUO_DB, DATABASE_URL)")
     ap.add_argument("--out", default="data/score_scale.json")
     ap.add_argument("--gap-table", default="data/rank_gap.json")
     ap.add_argument("--pairs", type=int, default=SAMPLE_PAIRS, help="sampled 组合 wanted per position pair")

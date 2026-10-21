@@ -4,8 +4,7 @@ primary_region = "iad"   # US East, next to Neon and the NA players
 
 [build]
 
-[env]
-  DUO_DB = "/data/lol_duo.sqlite"
+[env]   # the database is the DATABASE_URL secret (Neon)
   DUO_SCORE_SCALE = "/data/score_scale.json"
 
 [mounts]

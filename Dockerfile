@@ -5,8 +5,8 @@ WORKDIR /app
 COPY pyproject.toml uv.lock .python-version ./
 RUN uv sync --frozen --no-dev
 COPY data/ data/
-ENV DUO_DB=/data/lol_duo.sqlite DUO_SCORE_SCALE=/data/score_scale.json PYTHONUNBUFFERED=1
+# The database is DATABASE_URL (Neon), set as a secret; the volume keeps the fitted score scale.
+ENV DUO_SCORE_SCALE=/data/score_scale.json PYTHONUNBUFFERED=1
 EXPOSE 8000
-# A database uploaded as /data/incoming.sqlite replaces the live one at the next start (docs/deploy.md);
-# its WAL files and the fitted score scale go with it, so the scale is refitted on the new data.
-CMD ["sh", "-c", "if [ -f /data/incoming.sqlite ]; then rm -f \"$DUO_DB-wal\" \"$DUO_DB-shm\" \"$DUO_SCORE_SCALE\" && mv /data/incoming.sqlite \"$DUO_DB\"; fi; exec uv run --no-dev uvicorn api:app --app-dir data --host 0.0.0.0 --port 8000"]
+# Without the secret the API would quietly start on an empty SQLite file, so refuse to start.
+CMD ["sh", "-c", "test -n \"$DATABASE_URL\" || { echo 'set the DATABASE_URL secret (docs/deploy.md)'; exit 1; }; exec uv run --no-dev uvicorn api:app --app-dir data --host 0.0.0.0 --port 8000"]

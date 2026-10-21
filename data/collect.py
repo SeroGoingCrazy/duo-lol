@@ -86,7 +86,9 @@ def _progress(conn, tier, div):
 
 
 def _set_progress(conn, tier, div, page, done):
-    conn.execute("INSERT OR REPLACE INTO ladder_progress VALUES (?,?,?,?)", (tier, div, page, int(done)))
+    conn.execute("""INSERT INTO ladder_progress VALUES (?,?,?,?)
+                    ON CONFLICT(tier, division) DO UPDATE SET last_page=excluded.last_page, done=excluded.done""",
+                 (tier, div, page, int(done)))
     conn.commit()
 
 
@@ -129,7 +131,9 @@ def collect_seed(conn, client, entry, tier, args, start_time):
         match = client.match(mid)
         if match and db.save_match(conn, match, tier):
             new += 1
-    conn.execute("INSERT OR REPLACE INTO seed_progress VALUES (?,?)", (entry["puuid"], args.matches_per_player))
+    conn.execute("""INSERT INTO seed_progress VALUES (?,?)
+                    ON CONFLICT(puuid) DO UPDATE SET matches_per_player=excluded.matches_per_player""",
+                 (entry["puuid"], args.matches_per_player))
     conn.commit()
     return new
 
@@ -174,7 +178,7 @@ def status(conn):
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("--db", default="lol_duo.sqlite")
+    ap.add_argument("--db", default=db.default_target(), help="SQLite path or Postgres URL (default: DUO_DB, DATABASE_URL)")
     ap.add_argument("--tiers", nargs="+", default=TIERS)
     ap.add_argument("--players-per-tier", type=int, default=200)
     ap.add_argument("--matches-per-player", type=int, default=20)
