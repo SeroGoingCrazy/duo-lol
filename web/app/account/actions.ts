@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { getDb, schema } from "@/lib/db";
+import { isBanned } from "@/lib/deckServer";
 import { riotAccount, RiotAccountError, warmPlayer } from "@/lib/riotAccount";
 import { riotIdProblem } from "@/lib/api";
 import { POSITIONS } from "@/lib/labels";
@@ -75,8 +76,10 @@ export async function checkVerification(_: ActionState): Promise<ActionState> {
   }
   if (await boundElsewhere(account.puuid, me)) return { error: "这个 Riot 账号已经绑定了别的会员" };
 
+  // a Riot account paused under an earlier membership stays paused (PRD-v2 §8)
+  const banned = await isBanned(db, account.puuid, account.riot_id);
   await db.update(schema.members)
-    .set({ puuid: account.puuid, riotId: account.riot_id, verifiedAt: new Date() })
+    .set({ puuid: account.puuid, riotId: account.riot_id, verifiedAt: new Date(), ...(banned ? { suspendedAt: new Date() } : {}) })
     .where(eq(schema.members.id, me));
   await db.insert(schema.memberPrefs).values({ memberId: me }).onConflictDoNothing();
   await db.delete(schema.verificationChallenges).where(eq(schema.verificationChallenges.memberId, me));

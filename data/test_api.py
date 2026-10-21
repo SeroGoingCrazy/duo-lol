@@ -120,7 +120,7 @@ def test_deck_returns_the_whole_ranked_pool(client):
 
 def test_recommendations_top5_duo_eligible(client):
     lookup(client, "Alpha#NA1")
-    out = client.get("/api/recommendations/Alpha%23NA1").json()
+    out = client.post("/api/recommendations", json={"riot_id": "Alpha#NA1"}).json()
     me = (out["me"]["tier"], out["me"]["division"], out["me"]["league_points"])
     with db.connect(DB) as conn:
         ranks = {riot_id: rank for _, riot_id, rank, _ in recommend.candidate_pool(conn)}
@@ -167,6 +167,14 @@ def test_deck_limited_to_candidates(client):
     assert [p["riot_id"] for p in out] == [first["riot_id"], second["riot_id"]]
     empty = client.post("/api/recommendations", json={"riot_id": "Alpha#NA1", "candidates": []}).json()
     assert empty["partners"] == []
+
+
+def test_exclude_hides_members_from_the_public_pool(client):
+    lookup(client, "Alpha#NA1")
+    pool = client.post("/api/recommendations", json={"riot_id": "Alpha#NA1", "limit": 200}).json()["partners"]
+    hide = [pool[0]["puuid"], pool[1]["riot_id"].upper()]
+    out = client.post("/api/recommendations", json={"riot_id": "Alpha#NA1", "limit": 200, "exclude": hide}).json()
+    assert [p["riot_id"] for p in out["partners"]] == [p["riot_id"] for p in pool[2:]]
 
 
 def test_deck_scores_a_data_poor_candidate_from_self_report(client):

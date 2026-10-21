@@ -4,7 +4,7 @@ import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { getDb, schema } from "@/lib/db";
-import { isAdmin } from "@/lib/deckServer";
+import { isAdmin, pause, unpause } from "@/lib/deckServer";
 
 async function admin() {
   if (!(await isAdmin((await auth())?.user?.id))) throw new Error("not an admin");
@@ -23,7 +23,8 @@ export async function dismissReports(form: FormData) {
 export async function suspendMember(form: FormData) {
   const db = await admin();
   const id = memberOf(form);
-  await db.update(schema.members).set({ suspendedAt: new Date() }).where(eq(schema.members.id, id));
+  const [target] = await db.select().from(schema.members).where(eq(schema.members.id, id));
+  if (target) await pause(db, target);
   await db.update(schema.reports).set({ status: "suspended", handledAt: new Date() })
     .where(and(eq(schema.reports.toMember, id), eq(schema.reports.status, "open")));
   revalidatePath("/admin");
@@ -33,7 +34,8 @@ export async function suspendMember(form: FormData) {
 export async function restoreMember(form: FormData) {
   const db = await admin();
   const id = memberOf(form);
-  await db.update(schema.members).set({ suspendedAt: null }).where(eq(schema.members.id, id));
+  const [target] = await db.select().from(schema.members).where(eq(schema.members.id, id));
+  if (target) await unpause(db, target);
   await db.update(schema.reports).set({ status: "dismissed", handledAt: new Date() })
     .where(and(eq(schema.reports.toMember, id), eq(schema.reports.status, "open")));
   revalidatePath("/admin");

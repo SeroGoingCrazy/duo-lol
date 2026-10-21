@@ -87,6 +87,11 @@ test("会员 滑卡: 撤销, 关闭同意被推荐, 举报 and the admin queue",
   await unbound.goto("/find");
   await expect(unbound.getByTestId("demo-notice")).toContainText("绑定 Riot 账号");
 
+  // the demo shows Riot IDs on its cards, so it never deals 会员
+  const demo = await (await unbound.request.post("/api/recommendations", { data: { riot_id: "Ivan#NA1", limit: 200 } })).json();
+  expect(demo.partners.length).toBeGreaterThan(0);
+  for (const p of demo.partners) expect(["Alice#NA1", "Dave#NA1", "Victor#NA1"]).not.toContain(p.riot_id);
+
   await ivan.goto("/find");
   await expect(remaining(ivan)).toBeVisible({ timeout: 30_000 });
   const total = Number((await remaining(ivan).innerText()).match(/\/ (\d+)/)![1]);

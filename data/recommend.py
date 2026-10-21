@@ -9,7 +9,7 @@ import json
 import player_profile
 import predict
 from predict import TIER_ORDER
-from service import riot_id_key
+from service import UNRANKED_TIER, riot_id_key
 
 TOP_N = 5
 DIVISIONS = ["IV", "III", "II", "I"]
@@ -70,8 +70,9 @@ def can_duo(a, b):
     return _allows(a, b) and _allows(b, a)
 
 
-def candidate_pool(conn, require_opt_in=False):
-    """[(puuid, riot_id, (tier, division, league_points), match_ids)] for ranked players."""
+def candidate_pool(conn, require_opt_in=False, include_unranked=False):
+    """[(puuid, riot_id, (tier, division, league_points), match_ids)] for ranked players; with
+    include_unranked, looked-up players without a tier too (tier None), for 会员 牌堆."""
     pool = {}
     opt = "AND pl.recommend_opt_in = 1" if require_opt_in else ""
     rows = conn.execute(
@@ -89,30 +90,38 @@ def candidate_pool(conn, require_opt_in=False):
         pool.setdefault(puuid, (puuid, riot_id, (tier, division, lp), []))[3].append(match_id)
     if not require_opt_in:
         for puuid, riot_id, tier, division, lp, ids in conn.execute(
-            "SELECT puuid, riot_id, tier, division, league_points, match_ids FROM player_cache WHERE tier IS NOT NULL"
+            "SELECT puuid, riot_id, tier, division, league_points, match_ids FROM player_cache"
+            + ("" if include_unranked else " WHERE tier IS NOT NULL")
         ):
             pool[puuid] = (puuid, riot_id, (tier, division, lp), json.loads(ids))
     return list(pool.values())
 
 
-def recommend(conn, source, me, gap_table=None, require_opt_in=False, top_n=TOP_N, only=None, reports=None):
+def recommend(conn, source, me, gap_table=None, require_opt_in=False, top_n=TOP_N, only=None, reports=None,
+              exclude=frozenset()):
     """me = service.lookup_player(...) result. Returns the best partners, highest first.
 
     only: restrict the pool to these players (the site's 会员 who pass its own filters), matched by
     puuid or by Riot ID key, since a new API key re-encrypts puuids. reports: {puuid: profile} from
-    自选英雄, used for those players when they are 数据不足."""
+    自选英雄, used for those players when they are 数据不足. exclude: puuids / Riot ID keys to leave out.
+    Unranked candidates are scored and matched like an unranked `me`: their 自选英雄 tier, else UNRANKED_TIER."""
     # Unranked players are scored as UNRANKED_TIER (PRD decision) and matched at its bottom division.
     my_rank = (me["tier"], me["division"], me["league_points"]) if me["tier"] else (me["profile"]["tier"], "IV", 0)
     results = []
-    for puuid, riot_id, rank, ids in candidate_pool(conn, require_opt_in):
-        tier = rank[0]
-        if only is not None and puuid not in only and riot_id_key(riot_id) not in only:
+    for puuid, riot_id, rank, ids in candidate_pool(conn, require_opt_in, include_unranked=only is not None):
+        key = riot_id_key(riot_id)
+        if puuid in exclude or key in exclude:
             continue
+        if only is not None and puuid not in only and key not in only:
+            continue
+        reported = (reports or {}).get(puuid) or (reports or {}).get(key)
+        if rank[0] is None:
+            rank = ((reported or {}).get("tier") or UNRANKED_TIER, "IV", 0)
+        tier = rank[0]
         if puuid == me["puuid"] or not can_duo(my_rank, rank):
             continue
         profile = player_profile.proficiency(conn, puuid, ids)
         if profile["insufficient_data"]:
-            reported = (reports or {}).get(puuid) or (reports or {}).get(riot_id_key(riot_id))
             if not reported:
                 continue
             profile = dict(reported)
