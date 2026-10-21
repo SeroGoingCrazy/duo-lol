@@ -1,8 +1,9 @@
 "use client";
+import Link from "next/link";
 import ChampionIcon from "@/components/ChampionIcon";
 import PositionIcon from "@/components/PositionIcon";
 import { Badge } from "@/components/ui/badge";
-import type { Player } from "@/lib/api";
+import { playerPath, type Player } from "@/lib/api";
 import { championName, type ChampionInfo } from "@/lib/champions";
 import { useT } from "@/components/LangProvider";
 
@@ -14,7 +15,7 @@ export default function PlayerCard({ player, role, info }: { player: Player; rol
     <div className="min-w-0 rounded-lg border bg-background/40 p-3" data-testid="player-card">
       <div className="flex items-center gap-2">
         {role && <PositionIcon position={role} size={22} />}
-        <span className="truncate font-semibold">{player.riot_id}</span>
+        <Link href={playerPath(player.riot_id)} className="truncate font-semibold text-foreground" data-testid="player-link">{player.riot_id}</Link>
       </div>
       <div className="mt-1 flex flex-wrap gap-1.5">
         <Badge>{t.tier(player.tier, player.division, player.league_points)}</Badge>

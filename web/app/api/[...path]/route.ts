@@ -8,6 +8,7 @@ const PUBLIC: [string, RegExp][] = [
   ["GET", /^lookups\/[^/]+$/],
   ["POST", /^pair$/],
   ["GET", /^champions$/],
+  ["GET", /^players\/[^/]+\/matches$/],
 ];
 
 async function proxy(req: Request, { params }: { params: Promise<{ path: string[] }> }) {

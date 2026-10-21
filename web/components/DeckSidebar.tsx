@@ -1,9 +1,10 @@
 "use client";
 import { useState } from "react";
 import { HeartHandshake } from "lucide-react";
+import Link from "next/link";
 import CopyButton from "@/components/CopyButton";
 import PositionIcon from "@/components/PositionIcon";
-import { type DeckCard } from "@/lib/api";
+import { playerPath, type DeckCard } from "@/lib/api";
 import { useT } from "@/components/LangProvider";
 import { cn } from "@/lib/utils";
 
@@ -48,7 +49,7 @@ export default function DeckSidebar({ mutual, likes, onOpen, className, disabled
                     <div className="flex items-center gap-3">
                       <PositionIcon position={p.roles.b} size={22} />
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1"><span className="truncate font-medium">{p.riot_id}</span>{p.riot_id && <CopyButton text={p.riot_id} />}</div>
+                        <div className="flex items-center gap-1">{p.riot_id ? <Link href={playerPath(p.riot_id)} className="truncate font-medium text-foreground">{p.riot_id}</Link> : null}{p.riot_id && <CopyButton text={p.riot_id} />}</div>
                         <div className="text-xs text-muted-foreground">{p.discord ? t("Discord：{name}", { name: p.discord }) : t.tier(p.tier, p.division)}</div>
                       </div>
                       {score(p)}

@@ -65,6 +65,19 @@ const EN = new Map<string, string>(Object.entries({
   "已复制": "Copied",
   "复制 ID": "Copy ID",
   "格式是 名字#标签，例如 Name#NA1": "Use name#tag, for example Name#NA1",
+  "复制分享链接": "Copy share link",
+
+  // 玩家资料页
+  "玩家资料": "Player",
+  "胜率 {wr}": "{wr} win rate",
+  "数据不足": "Few games",
+  "{n} 场": "{n} games",
+  "和 TA 查组合": "Check your duo with them",
+  "最近对局": "Recent games",
+  "本赛季还没有单双排对局。": "No Solo/Duo games this season yet.",
+  "{m} 分钟": "{m} min",
+  "胜": "Win",
+  "负": "Loss",
 
   // 自选英雄
   "{id} 本赛季单双排只有 {n} 场": "{id} has only {n} Solo/Duo games this season",

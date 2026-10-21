@@ -1,5 +1,6 @@
 "use client";
 import ChampionPairTable from "@/components/ChampionPairTable";
+import CopyButton from "@/components/CopyButton";
 import PlayerCard from "@/components/PlayerCard";
 import ScoreBadge, { ScoreHelp, scoreSummary } from "@/components/ScoreBadge";
 import { Card, CardTitle } from "@/components/ui/card";
@@ -33,8 +34,10 @@ export default function PairResultView({ r }: { r: PairResult }) {
           <PlayerCard player={r.a} role={r.roles.a} info={info} />
           <PlayerCard player={r.b} role={r.roles.b} info={info} />
         </div>
-        <div className="mt-2 text-xs text-muted-foreground">
-          {t("单排基线：{a} {pa}，{b} {pb}", { a: r.a.riot_id, pa: t.pct(r.solo_baselines.a), b: r.b.riot_id, pb: t.pct(r.solo_baselines.b) })}
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+          <span>{t("单排基线：{a} {pa}，{b} {pb}", { a: r.a.riot_id, pa: t.pct(r.solo_baselines.a), b: r.b.riot_id, pb: t.pct(r.solo_baselines.b) })}</span>
+          {/* the page keeps ?a=&b= in the address, so the link reopens this result */}
+          <CopyButton text={() => window.location.href} label={t("复制分享链接")} />
         </div>
       </Card>
 
