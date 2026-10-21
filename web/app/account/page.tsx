@@ -36,7 +36,7 @@ export default async function AccountPage() {
         <BindRiotCard riotId={member.verifiedAt ? member.riotId : null} pending={pending} />
         <PrefsCard
           verified={!!member.verifiedAt}
-          prefs={prefs ?? { positions: [], recommendOptIn: false, showDiscord: false }}
+          prefs={prefs ?? { positions: [], recommendOptIn: false, showDiscord: false, bio: "", languages: [], voice: null, playTimes: [] }}
           discordName={member.name ?? ""}
         />
         <DeleteAccountCard />

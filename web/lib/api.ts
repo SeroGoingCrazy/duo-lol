@@ -1,4 +1,5 @@
 // Client for data/api.py. Terms follow CONTEXT.md (预测胜率, 胜率差, 组合加成 ...).
+import type { DeckFilter, MemberProfile } from "@/lib/profile";
 
 export type ChampionStat = { champion: string; position: string; games: number; wins: number };
 
@@ -124,12 +125,13 @@ export function riotIdProblem(id: string): string | null {
 
 
 /** One 卡片 in a 牌堆. id is the 会员 id (or the Riot ID key in the demo); riot_id only after 互选. */
-export type DeckCard = Omit<Partner, "riot_id"> & { id: string; riot_id?: string; discord?: string | null };
+export type DeckCard = Omit<Partner, "riot_id"> & { id: string; riot_id?: string; discord?: string | null; profile?: MemberProfile };
 
 // 会员 牌堆 (PRD-v2 §6.1), served by Next itself rather than the Python API.
 export type Deck = {
   cards: DeckCard[]; likes_you: string[]; mutual: DeckCard[];
   likes_remaining: number; can_undo: boolean; retry_after: number | null;
+  filter: DeckFilter; looking_until: string | null;
 };
 export type SwipeResult = { mutual_like: boolean; match: { riot_id: string; discord: string | null } | null; likes_remaining: number };
 
@@ -142,5 +144,9 @@ export const cancelMutualLike = (other: string) =>
 export const blockMember = (to: string) => call<{ ok: true }>("/api/blocks", { method: "POST", body: JSON.stringify({ to }) });
 export const reportMember = (to: string, reason: string, detail: string) =>
   call<{ ok: true }>("/api/reports", { method: "POST", body: JSON.stringify({ to, reason, detail }) });
+export const saveDeckFilter = (filter: DeckFilter) =>
+  call<Deck>("/api/deck/filter", { method: "POST", body: JSON.stringify(filter) });
+export const setLooking = (on: boolean) =>
+  call<{ looking_until: string | null }>("/api/looking", { method: "POST", body: JSON.stringify({ on }) });
 export const saveSelfReport = (r: SelfReport) =>
   call<{ ok: true }>("/api/self-report", { method: "POST", body: JSON.stringify(r) });

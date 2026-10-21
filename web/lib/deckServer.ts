@@ -7,6 +7,7 @@ import { pythonFetch } from "@/lib/pythonApi";
 import { POSITIONS, riotIdKey, type DeckCard, type Partner, type SelfReport } from "@/lib/api";
 import { SELF_REPORT_TIERS } from "@/lib/labels";
 import { REPORT_REASONS } from "@/lib/reportReasons";
+import { cleanFilter, isFiltered, LOOKING_HOURS, passes, type DeckFilter, type MemberProfile } from "@/lib/profile";
 
 export const DAILY_LIKES = 100;        // §8: a cap against liking everyone; it never affects the order
 export const ACTIVE_DAYS = 14;         // §3.2: only 会员 seen in the last 14 days are dealt
@@ -17,6 +18,7 @@ const MAX_CANDIDATES = 4000;           // under data/api.py MAX_CANDIDATES, leav
 const { members, memberPrefs, swipes, mutualLikes, blocks, reports, authAccounts, riotBans } = schema;
 type Db = Awaited<ReturnType<typeof getDb>>;
 type Member = typeof members.$inferSelect;
+type Prefs = typeof memberPrefs.$inferSelect;
 
 export class DeckError extends Error {
   constructor(public status: number, message: string, public code?: string) { super(message); }
@@ -77,17 +79,26 @@ async function score(me: Member, report: SelfReport | null | undefined, others: 
   return out;
 }
 
-/** Strip what a card must not show before 互选: the Riot ID and the puuid. */
-function card(id: string, p: Partner): DeckCard {
-  const { riot_id: _r, puuid: _p, ...rest } = p as Partner & { puuid?: string };
-  return { ...rest, id };
+/** What the card shows about a 会员 next to the model's numbers. */
+export function profileOf(prefs: Prefs, now = new Date()): MemberProfile {
+  return {
+    bio: prefs.bio, positions: prefs.positions, languages: prefs.languages, voice: prefs.voice ?? null,
+    play_times: prefs.playTimes, looking_now: !!prefs.lookingUntil && prefs.lookingUntil > now,
+  };
 }
 
-const unscored = (id: string): DeckCard => ({
-  id, tier: "", division: null, win_rate: 0, win_rate_delta: 0, score: null, roles: { a: "", b: "" }, top_pairs: [], reasons: [],
+/** Strip what a card must not show before 互选: the Riot ID and the puuid. */
+function card(id: string, p: Partner, profile: MemberProfile): DeckCard {
+  const { riot_id: _r, puuid: _p, ...rest } = p as Partner & { puuid?: string };
+  return { ...rest, id, profile };
+}
+
+const unscored = (id: string, profile: MemberProfile): DeckCard => ({
+  id, tier: "", division: null, win_rate: 0, win_rate_delta: 0, score: null, roles: { a: "", b: "" }, top_pairs: [], reasons: [], profile,
 });
 
-/** GET /api/deck: the 牌堆 (best 预测胜率 first), who likes me, and my 互选 with their Riot IDs. */
+/** GET /api/deck: the 牌堆 (best 预测胜率 first), who likes me, and my 互选 with their Riot IDs.
+ *  My 牌堆 filters drop cards before scoring, but never someone who already likes me. */
 export async function deck() {
   const { me, prefs, db } = await swiper();
   const since = new Date(Date.now() - ACTIVE_DAYS * 86_400_000);
@@ -107,7 +118,10 @@ export async function deck() {
       .where(inArray(members.id, [...mutual.keys()]))
     : [];
   pool.sort((a, b) => +b.members.lastActiveAt! - +a.members.lastActiveAt!);   // most recently active first if capped
-  const unseen = pool.filter((r) => !hidden.has(r.members.id) && !swiped.has(r.members.id) && !mutual.has(r.members.id))
+  const filter = cleanFilter(prefs?.deckFilter, POSITIONS);
+  const now = new Date();
+  const unseen = pool.filter((r) => !hidden.has(r.members.id) && !swiped.has(r.members.id) && !mutual.has(r.members.id)
+    && (likers.has(r.members.id) || passes(profileOf(r.member_prefs, now), filter)))
     .slice(0, MAX_CANDIDATES);
   const asCandidate = (r: (typeof pool)[number]) => ({ member: r.members, report: r.member_prefs.selfReport ?? null });
   // scored apart, so 互选 never take 牌堆 slots and keep their own score
@@ -117,7 +131,7 @@ export async function deck() {
   const cards: DeckCard[] = [];
   for (const r of unseen) {
     const p = scored.get(r.members.id);
-    if (p) cards.push(card(r.members.id, p));
+    if (p) cards.push(card(r.members.id, p, profileOf(r.member_prefs, now)));
   }
   cards.sort((a, b) => b.win_rate - a.win_rate);
   // a 互选 stays listed even if the pair can no longer be scored (say, one of them climbed out of duo range)
@@ -125,7 +139,8 @@ export async function deck() {
     .filter((r) => !hidden.has(r.members.id))
     .map((r) => {
       const p = scoredMutual.get(r.members.id);
-      return { ...(p ? card(r.members.id, p) : unscored(r.members.id)), riot_id: r.members.riotId!,
+      const profile = profileOf(r.member_prefs, now);
+      return { ...(p ? card(r.members.id, p, profile) : unscored(r.members.id, profile)), riot_id: r.members.riotId!,
         discord: r.member_prefs.showDiscord ? r.members.name : null };
     })
     .sort((a, b) => +mutual.get(b.id)! - +mutual.get(a.id)!);
@@ -133,8 +148,24 @@ export async function deck() {
   return {
     cards, likes_you: cards.filter((c) => likers.has(c.id)).map((c) => c.id), mutual: mutualCards,
     likes_remaining: DAILY_LIKES - (await likesToday(db, me.id)), can_undo: lastPass !== null,
-    retry_after: cards.length === 0 ? 60 : null,
+    // an empty deck refills as 会员 join; slower when my own filters emptied it
+    retry_after: cards.length === 0 ? (isFiltered(filter) ? 300 : 60) : null, filter, looking_until: prefs?.lookingUntil ?? null,
   };
+}
+
+/** POST /api/deck/filter: save my 牌堆 filters and return the 牌堆 they give. */
+export async function setFilter(f: Partial<DeckFilter>) {
+  const { me, db } = await swiper();
+  await db.update(memberPrefs).set({ deckFilter: cleanFilter(f, POSITIONS) }).where(eq(memberPrefs.memberId, me.id));
+  return deck();
+}
+
+/** POST /api/looking: 现在想打 on for LOOKING_HOURS, or off. */
+export async function setLooking(on: boolean) {
+  const { me, db } = await swiper();
+  const lookingUntil = on ? new Date(Date.now() + LOOKING_HOURS * 3_600_000) : null;
+  await db.update(memberPrefs).set({ lookingUntil }).where(eq(memberPrefs.memberId, me.id));
+  return { looking_until: lookingUntil };
 }
 
 async function likesToday(db: Db, me: string) {

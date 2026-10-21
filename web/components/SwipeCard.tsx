@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { CardTitle } from "@/components/ui/card";
 import { useT } from "@/components/LangProvider";
 import type { DeckCard } from "@/lib/api";
+import { LANGUAGE_LABELS, PLAY_TIME_LABELS, type MemberProfile } from "@/lib/profile";
 import { championName, type ChampionInfo } from "@/lib/champions";
 import type { T } from "@/lib/i18n";
 import type { Swipe } from "@/lib/deck";
@@ -153,9 +154,11 @@ export default function SwipeCard({ p, info, fling, onSwiped, onSwipeStart, like
             <div className="mt-2 flex flex-wrap gap-2">
               <Badge>{t.tier(p.tier, p.division)}</Badge>
               {likesYou && <Badge className="gap-1 bg-good/10 text-good"><Heart className="size-3" />{t("喜欢了你")}</Badge>}
+              {p.profile?.looking_now && <Badge className="gap-1 bg-good/10 text-good" data-testid="looking-badge"><span className="size-1.5 rounded-full bg-good" />{t("现在想打")}</Badge>}
             </div>
           </div>
         </div>
+        {p.profile && <ProfileLine profile={p.profile} />}
       </div>
 
       <div className="min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain px-5 py-3 sm:px-6 sm:py-5" data-testid="card-content">
@@ -232,6 +235,23 @@ export default function SwipeCard({ p, info, fling, onSwiped, onSwipeStart, like
           {hint === "like" ? <Heart className="mr-2 size-6" /> : <X className="mr-2 size-6" />}{t(hint === "like" ? "喜欢" : "跳过")}
         </Badge>
       )}
+    </div>
+  );
+}
+
+/** 简介 and the 会员's own tags under the card's title. */
+function ProfileLine({ profile }: { profile: MemberProfile }) {
+  const t = useT();
+  const tags = [
+    ...profile.languages.map((l) => LANGUAGE_LABELS[l] ?? l),
+    ...(profile.voice ? [t(profile.voice === "voice" ? "开麦" : "只打字")] : []),
+    ...profile.play_times.map((p) => t(PLAY_TIME_LABELS[p] ?? p)),
+  ];
+  if (!profile.bio && tags.length === 0) return null;
+  return (
+    <div className="mt-3 space-y-1.5" data-testid="card-profile">
+      {profile.bio && <p className="line-clamp-2 text-sm leading-snug">{profile.bio}</p>}
+      {tags.length > 0 && <p className="truncate text-xs text-muted-foreground">{tags.join(" · ")}</p>}
     </div>
   );
 }

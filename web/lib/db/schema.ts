@@ -1,5 +1,6 @@
 // The app schema (ADR-0004, PRD-v2 §7): written only by the website. The Python API owns the data schema;
 // the two meet only at members.puuid.
+import type { DeckFilter } from "@/lib/profile";
 import { boolean, index, integer, jsonb, pgSchema, primaryKey, serial, text, timestamp } from "drizzle-orm/pg-core";
 
 export const app = pgSchema("app");
@@ -45,6 +46,13 @@ export const memberPrefs = app.table("member_prefs", {
   recommendOptIn: boolean("recommend_opt_in").notNull().default(false), // 同意被推荐: off until ticked
   showDiscord: boolean("show_discord").notNull().default(false),
   selfReport: jsonb("self_report").$type<{ tier?: string; picks: { champion: string; position: string }[] }>(),  // 自选英雄 when 数据不足
+  // 简介 and the rest of the card's profile (lib/profile.ts); never contact details, those wait for 互选
+  bio: text("bio").notNull().default(""),
+  languages: text("languages").array().notNull().default([]),
+  voice: text("voice", { enum: ["voice", "text"] }),
+  playTimes: text("play_times").array().notNull().default([]),
+  lookingUntil: timestamp("looking_until", { mode: "date" }),   // 现在想打 until then
+  deckFilter: jsonb("deck_filter").$type<DeckFilter>(),         // my own 牌堆 filters
 });
 
 const member = (name: string) => text(name).notNull().references(() => members.id, { onDelete: "cascade" });
