@@ -22,6 +22,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 import db
+import player_profile
 import predict
 import recommend
 import score_scale
@@ -123,7 +124,8 @@ def player_summary(p):
     prof = p["profile"]
     return {"riot_id": p["riot_id"], "tier": p["tier"], "division": p["division"],
             "league_points": p["league_points"], "unranked": p["unranked"],
-            "games": prof["games"], "insufficient_data": prof["insufficient_data"],
+            "games": prof["games"], "wins": sum(c["wins"] for c in prof["champions"]),
+            "insufficient_data": prof["insufficient_data"],
             "champions": prof["champions"][:10]}
 
 
@@ -135,6 +137,21 @@ def get_player(riot_id: str):
     if not hit:
         raise HTTPException(404, "not cached")
     return player_summary(hit)
+
+
+RECENT_GAMES = 20
+
+
+@app.get("/api/players/{riot_id}/matches")
+def player_matches(riot_id: str):
+    """玩家资料页: a cached player's latest Solo/Duo games this season; 404 until it has been looked up."""
+    with connect() as conn:
+        row = service.cached_row(conn, riot_id)
+        if not row:
+            raise HTTPException(404, f"{riot_id} 还没有查询过")
+        puuid, name, *_, match_ids = row
+        games = player_profile.recent_games(conn, puuid, json.loads(match_ids), RECENT_GAMES)
+    return {"riot_id": name, "games": games}
 
 
 class LookupRequest(BaseModel):

@@ -55,6 +55,18 @@ def test_lookup_then_cached(client):
     cached = client.get("/api/players/alpha%23na1")
     assert cached.status_code == 200 and time.monotonic() - t0 < 10   # PRD §5.2
     assert cached.json()["games"] == 40
+    assert 0 < cached.json()["wins"] < 40   # over every game, not just the top 10 champions listed
+
+
+def test_recent_games_newest_first(client):
+    assert client.get("/api/players/Ghost%23NA1/matches").status_code == 404
+    lookup(client, "Alpha#NA1")
+    out = client.get("/api/players/alpha%23na1/matches").json()
+    assert out["riot_id"] == "Alpha#NA1" and len(out["games"]) == api.RECENT_GAMES
+    times = [g["game_creation"] for g in out["games"]]
+    assert times == sorted(times, reverse=True)
+    assert set(out["games"][0]) == {"match_id", "game_creation", "game_duration", "champion", "position", "win",
+                                    "kills", "deaths", "assists", "cs"}
 
 
 def test_cache_key_ignores_case_and_spacing(client):

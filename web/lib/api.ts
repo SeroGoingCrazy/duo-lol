@@ -10,6 +10,7 @@ export type Player = {
   league_points: number | null;
   unranked: boolean;
   games: number;
+  wins: number;
   insufficient_data: boolean;
   champions: ChampionStat[];
 };
@@ -104,6 +105,31 @@ export function findPartners(riotId: string, report?: SelfReport, limit?: number
     method: "POST",
     body: JSON.stringify({ riot_id: riotId, self_report: report ?? null, limit: limit ?? 5 }),
   });
+}
+
+/** One of a player's latest Solo/Duo games, for the 玩家资料页. */
+export type RecentGame = {
+  match_id: string; game_creation: number | null; game_duration: number | null; champion: string; position: string;
+  win: boolean; kills: number; deaths: number; assists: number; cs: number;
+};
+
+export function recentGames(riotId: string) {
+  return call<{ riot_id: string; games: RecentGame[] }>(`/api/players/${encodeURIComponent(riotId)}/matches`, { cache: "no-store" });
+}
+
+/** /player/Name-NA1, the 玩家资料页 (op.gg-style: a tag never contains "-", so the last one splits it). */
+export function playerPath(riotId: string) {
+  const i = riotId.lastIndexOf("#");
+  if (i < 0) return `/player/${encodeURIComponent(riotId.trim())}`;   // not a Riot ID: the page answers 404
+  return `/player/${encodeURIComponent(riotId.slice(0, i).trim())}-${encodeURIComponent(riotId.slice(i + 1).trim())}`;
+}
+
+export function riotIdFromSlug(slug: string): string | null {
+  let s = slug;
+  try { s = decodeURIComponent(slug); } catch { /* already decoded */ }
+  const i = s.lastIndexOf("-");
+  if (i <= 0 || i === s.length - 1) return null;
+  return `${s.slice(0, i)}#${s.slice(i + 1)}`;
 }
 
 export function listChampions() {
