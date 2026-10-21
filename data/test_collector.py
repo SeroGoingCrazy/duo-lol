@@ -76,6 +76,32 @@ def test_profile_insufficient_data():
     assert prof.proficiency(conn, "p0", ids[:19])["insufficient_data"]
 
 
+def test_profile_after_key_change():
+    """A new API key sees new PUUIDs; cached matches are re-keyed instead of stored twice."""
+    import player_profile as prof
+    conn = db.connect(os.path.join(tempfile.mkdtemp(), "k.sqlite"))
+    fake = FakeClient()
+    ids = [f"NA1_{k}" for k in range(25)]
+    fake.season_match_ids = lambda puuid, start_time, limit=100: ids[:limit]
+    assert prof.fetch_profile(conn, fake, "p0")["games"] == 25
+
+    old_match = fake.match
+
+    def new_key_match(mid):
+        m = old_match(mid)
+        for p in m["info"]["participants"]:
+            p["puuid"] = "new-" + p["puuid"]
+        return m
+    fake.match = new_key_match
+    out = prof.fetch_profile(conn, fake, "new-p0")
+    assert out["games"] == 25 and out["champions"][0]["games"] == 25
+    assert conn.execute("SELECT COUNT(*) FROM participants").fetchone()[0] == 25 * 10
+    assert conn.execute("SELECT COUNT(*) FROM participants WHERE puuid LIKE 'new-%'").fetchone()[0] == 250
+    calls = fake.calls
+    prof.fetch_profile(conn, fake, "new-p0")
+    assert fake.calls == calls   # re-keyed matches count as cached again
+
+
 def test_party_fields():
     m = fake_match("x")
     assert db.party_fields(m) == []
