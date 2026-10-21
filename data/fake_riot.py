@@ -74,7 +74,7 @@ class FakeRiotClient:
         name = self.names.get(puuid, ("", ""))[0]
         n = 8 if name.lower().startswith("new") else 40
         own = [f"FAKE_{puuid}_{i}" for i in range(n)]
-        if puuid in DUO_PUUIDS:   # DuoA#NA1 and DuoB#NA1 queued DUO_GAMES games together, newest first
+        if puuid in DUO_PUUIDS:   # DuoA#NA1 and DuoB#NA1 queued DUO_GAMES games together, their latest ones
             own = [f"FAKE_duo_{i}" for i in range(DUO_GAMES)] + own[DUO_GAMES:]
         return own[:limit]
 
@@ -119,7 +119,7 @@ class FakeRiotClient:
         for team in (100, 200):
             for pos in POSITIONS:
                 mine = team == 100 and pos in duo
-                puuid = duo[pos] if mine else f"fake-filler-{rng.randrange(300)}"
+                puuid = duo[pos] if mine else f"fake-filler-{team}{pos}-{rng.randrange(300)}"   # unique within the game
                 name = ("DuoA" if pos == "MIDDLE" else "DuoB") if mine else f"Filler{rng.randrange(300)}"
                 parts.append({
                     "puuid": puuid, "riotIdGameName": name, "riotIdTagline": "NA1",
@@ -129,7 +129,7 @@ class FakeRiotClient:
                     "neutralMinionsKilled": 0, "visionScore": 20,
                 })
         return {"metadata": {"matchId": match_id},
-                "info": {"queueId": 420, "gameVersion": "15.20", "gameCreation": 1_760_000_100_000 + idx,
+                "info": {"queueId": 420, "gameVersion": "15.20", "gameCreation": 1_760_000_100_000 - idx,
                          "gameDuration": 1800, "participants": parts}}
 
 

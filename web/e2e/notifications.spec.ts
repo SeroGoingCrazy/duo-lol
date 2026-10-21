@@ -25,6 +25,13 @@ test("a 喜欢 and a 互选 show in the nav until 找搭子 is opened, and the �
   await b.getByTestId("likes-list").getByRole("button").first().click();
   await b.getByRole("button", { name: "喜欢", exact: true }).click();
   await expect(b.getByTestId("match-riot-id")).toHaveText("DuoA#NA1");
+  await b.getByRole("button", { name: "继续滑" }).click();
+  await b.getByRole("tab", { name: /互选/ }).click();
+  await expect(b.getByTestId("duo-record")).toHaveText("本赛季一起打了 10 局，赢 7 局");   // without a reload
+  // B made this 互选 themselves, so it isn't news to B
+  const bChecked = b.waitForResponse((r) => r.url().endsWith("/api/notifications"));
+  await b.goto("/account");
+  expect(await (await bChecked).json()).toEqual({ unseen: 0 });
 
   // A was away: the 互选 waits in the nav, and opening 找搭子 clears it
   await a.goto("/account");

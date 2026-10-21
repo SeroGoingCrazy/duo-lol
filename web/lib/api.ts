@@ -163,7 +163,9 @@ export type Deck = {
   likes_remaining: number; can_undo: boolean; retry_after: number | null;
   filter: DeckFilter; looking_until: string | null;
 };
-export type SwipeResult = { mutual_like: boolean; match: { riot_id: string; discord: string | null } | null; likes_remaining: number };
+export type SwipeResult = {
+  mutual_like: boolean; match: { riot_id: string; discord: string | null; duo_record: DuoRecord | null } | null; likes_remaining: number;
+};
 
 export const getDeck = () => call<Deck>("/api/deck", { cache: "no-store" });
 export const postSwipe = (to: string, action: "like" | "pass") =>
