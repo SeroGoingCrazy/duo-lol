@@ -3,7 +3,7 @@
 import { and, desc, eq, gte, inArray, isNull, or, sql } from "drizzle-orm";
 import { auth } from "@/auth";
 import { getDb, schema } from "@/lib/db";
-import { API_URL } from "@/lib/riotAccount";
+import { pythonFetch } from "@/lib/pythonApi";
 import { POSITIONS, riotIdKey, type DeckCard, type Partner, type SelfReport } from "@/lib/api";
 import { SELF_REPORT_TIERS } from "@/lib/labels";
 import { REPORT_REASONS } from "@/lib/reportReasons";
@@ -56,8 +56,8 @@ async function activeMutualIds(db: Db, me: string) {
 
 async function score(me: Member, report: SelfReport | null | undefined, others: { member: Member; report: SelfReport | null }[]) {
   if (others.length === 0) return new Map<string, Partner>();
-  const res = await fetch(`${API_URL}/api/recommendations`, {
-    method: "POST", headers: { "content-type": "application/json" }, cache: "no-store",
+  const res = await pythonFetch("/api/recommendations", {
+    method: "POST", headers: { "content-type": "application/json" },
     body: JSON.stringify({
       riot_id: me.riotId, self_report: report ?? null, limit: DECK_LIMIT,
       candidates: others.map((o) => ({ puuid: o.member.puuid, riot_id: o.member.riotId, self_report: o.report })),

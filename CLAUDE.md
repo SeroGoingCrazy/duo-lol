@@ -8,6 +8,7 @@
 - Commit message 用 Conventional Commits 前缀：`feat:` 新功能、`fix:` 修 bug、`docs:` 文档、`chore:` 配置和杂项，例如 `feat: add champion-pair synergy`。
 
 - 运行演示：`uv run uvicorn api:app --app-dir data --port 8000`（`DUO_DB` 指向数据库；搭配评分用 `uv run python data/score_scale.py --db <数据库>` 预先拟合，没跑过的话 API 启动后在后台自己拟合），再在 `web/` 里 `npm install && npm run dev`，网站把 `/api/*` 转给 Python。登录要先把 `web/.env.example` 复制成 `web/.env.local` 填好（会员库本地用 PGlite，见 ADR-0009）。
+- 部署：`docs/deploy.md`（Vercel + Fly.io + Neon），CI 在 `.github/workflows/ci.yml`。
 - 测试：`uv run pytest`；端到端 `cd web && npx playwright test`（用 `data/fake_riot.py` 的合成数据，不需要 Key）。
 - Commit 信息用 `feat:` / `fix:` / `docs:` / `chore:` 开头。
 
