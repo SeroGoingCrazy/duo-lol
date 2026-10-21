@@ -3,11 +3,13 @@ import { Card } from "@/components/ui/card";
 
 export const metadata: Metadata = { title: "服务条款" };
 
+const UPDATED = "2026-10-21";
+
 export default function TermsPage() {
   return (
     <article className="mx-auto max-w-3xl space-y-4 text-sm leading-relaxed">
       <h1 className="text-2xl font-bold tracking-tight lg:text-3xl">服务条款</h1>
-      <p className="text-muted-foreground">更新于 2026-10-21</p>
+      <p className="text-muted-foreground">更新于 {UPDATED}</p>
       <Card className="space-y-3">
         <h2 className="font-semibold">这个网站是什么</h2>
         <p>一个帮美服英雄联盟玩家找单双排搭子的工具：根据双方的公开对局预测一起双排的胜率，并在双方都同意后交换 Riot ID。它是免费的非官方粉丝项目，不是 Riot Games 的产品。</p>

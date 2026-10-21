@@ -12,8 +12,8 @@ fly secrets set RIOT_API_KEY=RGAPI-... DUO_INTERNAL_SECRET=$(openssl rand -hex 3
 fly deploy
 ```
 
-- 把本地的 `lol_duo.sqlite` 传到卷上：`fly ssh sftp shell`，然后 `put lol_duo.sqlite /data/lol_duo.sqlite`。每天采集完可以再传一次。
-- `score_scale.json` 第一次启动会在后台自己拟合并写到 `/data`。
+- 把本地的 `lol_duo.sqlite` 传上去：`fly ssh sftp shell`，`put lol_duo.sqlite /data/incoming.sqlite`，再 `fly machine restart`。启动时会用它替换正在用的库（连同 WAL 文件），并删掉旧的 `score_scale.json`，搭配评分在后台按新数据重新拟合。**不要直接覆盖 `/data/lol_duo.sqlite`**，服务在写它。
+- 每天采集完可以照样再传一次。注意：替换会丢掉线上这段时间查过的玩家缓存，他们下次查询要重新从 Riot 拉。M1 迁到 Postgres 后就不用传文件了。
 - **`DUO_INTERNAL_SECRET` 必须设。** 设了以后，Python API 只接受带这个密钥的请求，浏览器只能通过网站允许的几个接口（`web/app/api/[...path]`）访问它，Riot 头像查询和会员牌堆接口不会被直接调用。
 - 开发者 Key 每 24 小时过期，过期后 `fly secrets set RIOT_API_KEY=...` 换新的（会自动重启）。正式上线前要申请 Personal 或 Production Key。
 

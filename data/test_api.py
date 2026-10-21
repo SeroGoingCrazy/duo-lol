@@ -265,4 +265,5 @@ def test_internal_secret_gates_every_request(client, monkeypatch):
     monkeypatch.setattr(api, "INTERNAL_SECRET", "s3cret")
     assert client.get("/api/champions").status_code == 403
     assert client.get("/api/champions", headers={"x-duo-internal": "wrong"}).status_code == 403
+    assert client.get("/api/champions", headers={"x-duo-internal": "\xe9".encode("latin-1")}).status_code == 403
     assert client.get("/api/champions", headers={"x-duo-internal": "s3cret"}).status_code == 200

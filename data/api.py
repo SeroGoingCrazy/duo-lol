@@ -46,7 +46,8 @@ INTERNAL_SECRET = os.environ.get("DUO_INTERNAL_SECRET", "")
 
 @app.middleware("http")
 async def require_internal_secret(request: Request, call_next):
-    if INTERNAL_SECRET and not hmac.compare_digest(request.headers.get("x-duo-internal", ""), INTERNAL_SECRET):
+    if INTERNAL_SECRET and not hmac.compare_digest(
+            request.headers.get("x-duo-internal", "").encode(), INTERNAL_SECRET.encode()):
         return JSONResponse({"detail": "forbidden"}, status_code=403)
     return await call_next(request)
 scale = score_scale.load_scale(SCORE_SCALE_PATH)

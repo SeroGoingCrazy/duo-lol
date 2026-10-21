@@ -15,9 +15,10 @@ primary_region = "iad"   # US East, next to Neon and the NA players
 [http_service]
   internal_port = 8000
   force_https = true
-  auto_stop_machines = "stop"
+  # one machine always on: lookups run as in-memory jobs, and stopping would drop them
+  auto_stop_machines = "off"
   auto_start_machines = true
-  min_machines_running = 0
+  min_machines_running = 1
 
 [[vm]]
   size = "shared-cpu-1x"
