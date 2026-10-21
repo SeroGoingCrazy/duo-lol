@@ -28,6 +28,7 @@ export type PairResult = {
   win_rate: number;
   win_rate_delta: number;
   score: number | null;   // 搭配评分 0-100; null until the score scale is fitted
+  score_by_roles?: boolean;   // compared only with 组合 in the same two positions (false: too few, compared with all)
   solo_baselines: { a: number; b: number };
   roles: { a: string; b: string };
   top_pairs: ChampionPair[];
@@ -41,6 +42,7 @@ export type Partner = {
   win_rate: number;
   win_rate_delta: number;
   score: number | null;
+  score_by_roles?: boolean;
   roles: { a: string; b: string };
   top_pairs: ChampionPair[];
   reasons: string[];
@@ -134,6 +136,17 @@ export function riotIdFromSlug(slug: string): string | null {
 
 export function listChampions() {
   return call<string[]>("/api/champions");
+}
+
+let championPositions: Promise<Record<string, string[]>> | null = null;
+
+/** {champion: positions it is commonly played in}, fetched once; {} if the API can't answer. */
+export function listChampionPositions() {
+  championPositions ??= call<Record<string, string[]>>("/api/champion-positions").catch(() => {
+    championPositions = null;
+    return {};
+  });
+  return championPositions;
 }
 
 /** Same rule as service.riot_id_key: case and spaces around '#' don't matter. */

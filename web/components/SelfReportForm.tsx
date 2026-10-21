@@ -71,7 +71,7 @@ export default function SelfReportForm({ player, champions, initial, step, class
             <div key={i}>
               <div className="flex gap-2">
                 <div className="min-w-0 flex-1">
-                  <ChampionPicker champions={champions} info={info} value={p.champion} label={t("英雄 {n}", { n: i + 1 })}
+                  <ChampionPicker champions={champions} info={info} value={p.champion} label={t("英雄 {n}", { n: i + 1 })} position={p.position}
                     invalid={!!err && !known(p.champion)} onChange={(c) => update(i, { champion: c })} />
                 </div>
                 <Select value={p.position} onValueChange={(v) => update(i, { position: v })}>

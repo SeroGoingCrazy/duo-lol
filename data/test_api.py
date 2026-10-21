@@ -160,8 +160,8 @@ def test_recommendations_top5_duo_eligible(client):
     for p in out["partners"]:
         assert recommend.can_duo(me, ranks[p["riot_id"]])
         assert p["riot_id"] != out["me"]["riot_id"]
-        assert set(p) == {"puuid", "riot_id", "tier", "division", "win_rate", "win_rate_delta", "score", "roles",
-                          "top_pairs", "reasons"}
+        assert set(p) == {"puuid", "riot_id", "tier", "division", "win_rate", "win_rate_delta", "score", "score_by_roles",
+                          "roles", "top_pairs", "reasons"}
         assert 1 <= len(p["top_pairs"]) <= 3
 
 
@@ -227,13 +227,36 @@ def test_score_follows_fitted_normal(client):
     assert score_scale.duo_score(scale["mean"] + scale["std"], scale) == 84
     assert score_scale.duo_score(0.9, scale) <= 100 and score_scale.duo_score(0.1, scale) >= 0
     assert score_scale.duo_score(0.5, None) is None
+    assert scale["by_roles"] and all("+" in k and v["pairs"] >= 2 for k, v in scale["by_roles"].items())
+    assert sum(v["pairs"] for v in scale["by_roles"].values()) == scale["pairs"]
     api.scale = scale
     try:
         lookup(client, "Alpha#NA1"); lookup(client, "Bravo#NA1")
         out = client.post("/api/pair", json={"a": "Alpha#NA1", "b": "Bravo#NA1"}).json()
-        assert out["score"] == score_scale.duo_score(out["win_rate"], scale)
+        assert out["score"] == score_scale.duo_score(out["win_rate"], scale, out["roles"])
+        assert out["score_by_roles"] == score_scale.compared_with(scale, out["roles"])[1]
     finally:
         api.scale = None
+
+
+def test_score_compares_only_same_positions():
+    jg_mid = {"mean": 0.52, "std": 0.01, "pairs": score_scale.MIN_ROLE_PAIRS}
+    scale = {"mean": 0.50, "std": 0.01, "pairs": 500,
+             "by_roles": {"JUNGLE+MIDDLE": jg_mid, "BOTTOM+UTILITY": {**jg_mid, "pairs": score_scale.MIN_ROLE_PAIRS - 1}}}
+    # 打野+中单 is compared with 打野+中单 only, whichever player takes which position
+    assert score_scale.duo_score(0.52, scale, {"a": "MIDDLE", "b": "JUNGLE"}) == 50
+    assert score_scale.duo_score(0.52, scale, {"a": "JUNGLE", "b": "MIDDLE"}) == 50
+    assert score_scale.compared_with(scale, {"a": "JUNGLE", "b": "MIDDLE"})[1]
+    # too few 下路+辅助 samples, or none at all for 上单+打野: compared with every 组合
+    for roles in ({"a": "BOTTOM", "b": "UTILITY"}, {"a": "TOP", "b": "JUNGLE"}):
+        assert score_scale.duo_score(0.52, scale, roles) == 98
+        assert not score_scale.compared_with(scale, roles)[1]
+
+
+def test_old_scale_without_positions_is_refitted(tmp_path):
+    path = tmp_path / "score_scale.json"
+    path.write_text('{"mean": 0.5, "std": 0.01, "pairs": 300}')
+    assert score_scale.load_scale(str(path)) is None
 
 
 @pytest.mark.parametrize("a, b, ok", [
@@ -297,3 +320,15 @@ def test_internal_secret_gates_every_request(client, monkeypatch):
     assert client.get("/api/champions", headers={"x-duo-internal": "wrong"}).status_code == 403
     assert client.get("/api/champions", headers={"x-duo-internal": "\xe9".encode("latin-1")}).status_code == 403
     assert client.get("/api/champions", headers={"x-duo-internal": "s3cret"}).status_code == 200
+
+
+def test_champion_positions_lists_common_positions(client):
+    lookup(client, "Alpha#NA1")
+    out = client.get("/api/champion-positions").json()
+    assert set(out) == set(client.get("/api/champions").json())
+    with db.connect(DB) as conn:
+        for champ, positions in out.items():
+            counts = dict(conn.execute("SELECT position, COUNT(*) FROM participants WHERE champion_name=? GROUP BY position",
+                                       (champ,)).fetchall())
+            assert positions and positions[0] == max(counts, key=counts.get)
+            assert all(counts[p] >= api.MIN_POSITION_SHARE * sum(counts.values()) for p in positions[1:])

@@ -8,6 +8,7 @@ const PUBLIC: [string, RegExp][] = [
   ["GET", /^lookups\/[^/]+$/],
   ["POST", /^pair$/],
   ["GET", /^champions$/],
+  ["GET", /^champion-positions$/],
   ["GET", /^players\/[^/]+\/matches$/],
 ];
 
