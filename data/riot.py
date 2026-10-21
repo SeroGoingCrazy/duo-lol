@@ -9,8 +9,8 @@ from urllib.parse import quote
 import requests
 from dotenv import load_dotenv
 
-# Repo-root .env; a RIOT_API_KEY already set in the environment wins.
-load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+# Repo-root .env (or the file DUO_ENV names); a RIOT_API_KEY already set in the environment wins.
+load_dotenv(os.environ.get("DUO_ENV") or Path(__file__).resolve().parent.parent / ".env")
 
 PLATFORM = "https://na1.api.riotgames.com"   # NA league / mastery endpoints
 REGION = "https://americas.api.riotgames.com"  # match-v5 for NA
@@ -63,9 +63,13 @@ class RiotClient:
         self.limiter = limiter or RateLimiter()
 
     def get(self, url, params=None, retries=5):
-        for _ in range(retries):
+        for attempt in range(1, retries + 1):
             self.limiter.wait()
-            resp = self.session.get(url, params=params, headers={"X-Riot-Token": self.api_key}, timeout=15)
+            try:
+                resp = self.session.get(url, params=params, headers={"X-Riot-Token": self.api_key}, timeout=15)
+            except (requests.ConnectionError, requests.Timeout):
+                time.sleep(5 * attempt)   # network blip; back off and retry
+                continue
             if resp.status_code == 429:
                 time.sleep(int(resp.headers.get("Retry-After", "10")))
                 continue

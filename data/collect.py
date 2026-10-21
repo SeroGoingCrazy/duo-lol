@@ -12,8 +12,10 @@ and the ladder crawl remembers its last page.
 of the seeds get a tier and the 段位差 term can be fitted. Seeds beyond those already stored are
 then drawn from the ladder without extra requests.
 
-RIOT_API_KEY is read from the repo-root .env (copy .env.example). If Riot rejects it (dev keys
-expire after 24h) the run stops; regenerate the key, update .env and rerun the same command.
+RIOT_API_KEY is read from the repo-root .env (copy .env.example), or the file DUO_ENV names. If
+Riot rejects it (dev keys expire after 24h) the run stops; regenerate the key, update .env and
+rerun the same command. A key that sees different PUUIDs is detected at start and the stored
+data is re-keyed first (key_epoch.py).
 
 Per-player profiles at query time use player_profile.py (up to 100 games this season).
 """
@@ -22,7 +24,10 @@ import random
 import sys
 import time
 
+import requests
+
 import db
+import key_epoch
 import player_profile
 from riot import APEX_TIERS, KeyRejected, RateLimiter, RiotClient
 
@@ -113,7 +118,12 @@ def collect_seed(conn, client, entry, tier, args, start_time):
         return 0
     db.save_player(conn, entry, int(time.time()))
     new = 0
-    for mid in client.season_match_ids(entry["puuid"], start_time, limit=args.matches_per_player):
+    try:
+        ids = client.season_match_ids(entry["puuid"], start_time, limit=args.matches_per_player)
+    except requests.HTTPError as e:   # e.g. 400 for a PUUID this key cannot decrypt
+        log(f"skipped seed: {e}")
+        return 0
+    for mid in ids:
         if db.has_match(conn, mid):
             continue
         match = client.match(mid)
@@ -128,6 +138,7 @@ def run(args):
     rng = random.Random(args.seed)
     client = make_client()
     conn = db.connect(args.db)
+    key_epoch.migrate(conn, client, key_epoch.check(conn, client, log), log)
     if getattr(args, "ladder", False):
         crawl_ladder(conn, client)
     start_time = player_profile.season_start_time(args.season_start)
@@ -156,6 +167,9 @@ def status(conn):
                           JOIN matches m USING (match_id) WHERE m.seed_tier IS NOT NULL) d
                         LEFT JOIN ladder l USING (puuid)""")[0]
     print(f"participants with a ladder tier: {known}/{total}")
+    for eid, before, done in q("SELECT id, matches_before, done FROM key_epoch WHERE done=0"):
+        n = q(f"SELECT COUNT(*) FROM rekeyed WHERE epoch={eid}")[0][0]
+        print(f"re-keying after a key change: {n}/{before} matches")
 
 
 if __name__ == "__main__":

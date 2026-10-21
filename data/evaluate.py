@@ -81,9 +81,12 @@ def pair_elo(source, record, tier_of, a, b, team_tier, gap_table):
     ta, tb = tier_of.get(a["puuid"], team_tier), tier_of.get(b["puuid"], team_tier)
     ca = {"champion": a["champion"], "position": a["position"], **record(a)}
     cb = {"champion": b["champion"], "position": b["position"], **record(b)}
-    syn, _ = synergy(source, ta, ca, tb, cb)
+    # 全服统计 are counted per seed tier, so champions are looked up at the team's seed tier;
+    # the players' own tiers only set the 段位差.
+    syn, _ = synergy(source, team_tier, ca, team_tier, cb)
     gap = abs(TIER_ORDER.index(ta) - TIER_ORDER.index(tb))
-    return champion_score(source, ta, ca) + champion_score(source, tb, cb) + syn + gap_table.get(gap, 0.0), gap
+    return (champion_score(source, team_tier, ca) + champion_score(source, team_tier, cb) + syn
+            + gap_table.get(gap, 0.0)), gap
 
 
 def run(conn, gap_table=None):

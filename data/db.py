@@ -46,6 +46,16 @@ CREATE TABLE IF NOT EXISTS ladder_progress (  -- resume point of the ladder craw
     tier TEXT, division TEXT, last_page INTEGER NOT NULL DEFAULT 0, done INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (tier, division)
 );
+CREATE TABLE IF NOT EXISTS key_epoch (        -- PUUIDs are encrypted per API key; a key that sees new ones starts an epoch
+    id INTEGER PRIMARY KEY,
+    probes TEXT NOT NULL,                     -- JSON [[riot_id, puuid], ...] as this key sees them
+    matches_before INTEGER NOT NULL,          -- matches with rowid <= this still carry the previous key's PUUIDs
+    started_at INTEGER NOT NULL,
+    done INTEGER NOT NULL DEFAULT 0           -- 1 once those matches are re-keyed
+);
+CREATE TABLE IF NOT EXISTS rekeyed (          -- matches whose participants were moved to the epoch's PUUIDs
+    match_id TEXT PRIMARY KEY, epoch INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS seed_progress (    -- seed players whose recent games are already stored
     puuid TEXT PRIMARY KEY,
     matches_per_player INTEGER NOT NULL       -- how many recent games were requested
