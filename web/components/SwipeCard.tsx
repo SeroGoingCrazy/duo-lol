@@ -168,7 +168,7 @@ export default function SwipeCard({ p, info, fling, onSwiped, onSwipeStart, like
               <div>
                 <div className="mb-2 flex items-center gap-1.5 text-sm text-muted-foreground">{t("搭配评分")} <ScoreHelp /></div>
                 <ScoreBadge score={p.score} />
-                {p.score != null && <div className="mt-2 text-xs text-muted-foreground">{scoreSummary(p.score, t)}</div>}
+                {p.score != null && <div className="mt-2 text-xs text-muted-foreground">{scoreSummary({ ...p, score: p.score }, t)}</div>}
               </div>
               <div className="text-right">
                 <div className="text-xs text-muted-foreground">{t("预测胜率")}</div>

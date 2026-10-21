@@ -57,8 +57,12 @@ const EN = new Map<string, string>(Object.entries({
   "评分怎么算": "How the score works",
   "比 {n}% 的组合更好": "Better than {n}% of pairs",
   "只比 {n}% 的组合好": "Better than only {n}% of pairs",
-  "双排的预测胜率大多集中在 50% 附近，差 1% 已经很明显。评分把预测胜率放进推荐池里所有可双排组合的胜率分布（按正态分布）里看排第几：":
-    "Predicted duo win rates cluster around 50%, so 1% is already a lot. The score ranks this pair's predicted win rate among all pairs in the pool who can queue together (a normal fit):",
+  "按位置筛选": "Filter by role",
+  "全部": "All",
+  "比 {n}% 的{roles}组合更好": "Better than {n}% of {roles} pairs",
+  "只比 {n}% 的{roles}组合好": "Better than only {n}% of {roles} pairs",
+  "双排的预测胜率大多集中在 50% 附近，差 1% 已经很明显。评分把预测胜率放进推荐池里同样两个位置、可双排的组合的胜率分布（按正态分布）里看排第几：":
+    "Predicted duo win rates cluster around 50%, so 1% is already a lot. The score ranks this pair's predicted win rate among pairs in the pool who can queue together in the same two roles (a normal fit):",
   "50 分是普通水平，84 分比 84% 的组合好，高于 50 分就算不错。": "50 is an average pair, 84 beats 84% of pairs, and anything above 50 is good.",
   "评分只说明这两个人搭配得合不合适，不是任何一个人的实力、段位或隐藏分。": "It only says how well these two fit together. It is not anyone's skill, rank or MMR.",
   "复制 {id}": "Copy {id}",

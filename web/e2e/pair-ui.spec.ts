@@ -12,7 +12,7 @@ test("navigate from the deck to 查组合, predict, reload and return", async ({
   await page.route("**/champions/names.json", (r) => r.fulfill({ json: {} }));
   await page.route("**/api/lookups", (r) => r.fulfill({ json: { player: player(r.request().postDataJSON().riot_id) } }));
   await page.route("**/api/pair", (r) => r.fulfill({ json: {
-    a: player("Alpha#NA1"), b: player("Bravo#NA1"), score: 84,
+    a: player("Alpha#NA1"), b: player("Bravo#NA1"), score: 84, score_by_roles: true,
     win_rate: 0.536, win_rate_delta: 0.016, solo_baselines: { a: 0.52, b: 0.52 },
     roles: { a: "MIDDLE", b: "JUNGLE" }, notes: [],
     top_pairs: [{ champion_a: "Ahri", champion_b: "LeeSin", win_rate: 0.54, pair_games: 1000 }],
@@ -25,6 +25,7 @@ test("navigate from the deck to 查组合, predict, reload and return", async ({
   await page.getByRole("button", { name: "预测", exact: true }).click();
   await expect(page.getByTestId("pair-result")).toBeVisible();
   await expect(page.getByTestId("score")).toHaveText("84分");
+  await expect(page.getByText("比 84% 的中单+打野组合更好")).toBeVisible();
   await expect(page.getByTestId("win-rate")).toHaveText("53.6%");
   await expect(page.getByTestId("player-card")).toHaveCount(2);
   await page.reload();

@@ -21,7 +21,7 @@ export default function PairResultView({ r, shareable = true }: { r: PairResult;
           <div>
             <div className="mb-2 flex items-center gap-1.5 text-sm text-muted-foreground">{t("搭配评分")} <ScoreHelp /></div>
             <ScoreBadge score={r.score} />
-            {r.score != null && <div className="mt-2 text-sm text-muted-foreground">{scoreSummary(r.score, t)}</div>}
+            {r.score != null && <div className="mt-2 text-sm text-muted-foreground">{scoreSummary({ ...r, score: r.score }, t)}</div>}
           </div>
           <div className="text-right">
             <div className="text-sm text-muted-foreground">{t("预测胜率")}</div>
