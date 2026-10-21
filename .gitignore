@@ -5,9 +5,14 @@ __pycache__/
 .env
 node_modules/
 .next/
+.next-dev/
+.next-ui/
+.next-e2e/
 .venv/
 *.log
 test-results/
 playwright-report/
 *.tsbuildinfo
 data/score_scale.json
+.env.local
+web/.data/

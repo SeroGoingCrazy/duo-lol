@@ -216,3 +216,12 @@ def test_parse_riot_id():
     assert service.parse_riot_id("a#b#NA1") == ("a#b", "NA1")
     with pytest.raises(ValueError):
         service.parse_riot_id("Faker")
+
+
+def test_riot_account_reports_the_current_icon(client):
+    first = client.get("/api/riot-accounts/Icon Tester%23NA1").json()
+    assert first["riot_id"] == "Icon Tester#NA1" and 0 <= first["profile_icon_id"] < 29
+    client.post("/api/fake/icon", json={"riot_id": "Icon Tester#NA1", "icon": 7})
+    assert client.get("/api/riot-accounts/Icon Tester%23NA1").json()["profile_icon_id"] == 7
+    assert client.get("/api/riot-accounts/Nobody%23NA1").status_code == 404
+    assert client.get("/api/riot-accounts/no-tag").status_code == 400

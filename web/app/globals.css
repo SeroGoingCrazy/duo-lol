@@ -67,3 +67,16 @@
 @keyframes indeterminate { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
 .animate-indeterminate { animation: indeterminate 1.4s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) { .animate-indeterminate { animation-duration: 4s; } }
+
+/* Keep the card as the visual focus, with a quiet stage behind the deck. */
+.swipe-stage {
+  background: radial-gradient(ellipse at 50% 35%, color-mix(in srgb, var(--primary) 9%, transparent), transparent 72%);
+  overflow: clip;
+}
+.swipe-profile {
+  box-shadow: 0 16px 48px -24px color-mix(in srgb, var(--foreground) 28%, transparent);
+}
+.swipe-profile-header {
+  background: linear-gradient(125deg, color-mix(in srgb, var(--primary) 12%, var(--card)), var(--card));
+  border-bottom: 1px solid var(--border);
+}

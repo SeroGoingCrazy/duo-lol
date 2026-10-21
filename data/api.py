@@ -176,6 +176,38 @@ def lookup_status(job_id: str):
     return job
 
 
+@app.get("/api/riot-accounts/{riot_id}")
+def riot_account(riot_id: str):
+    """Who a Riot ID is and the icon they wear right now, read fresh from Riot for 头像验证 (ADR-0005).
+    The site compares profile_icon_id with the icon it asked for; nothing is cached or stored here."""
+    try:
+        name, tag = service.parse_riot_id(riot_id)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    client = riot_client()
+    try:
+        account = client.account_by_riot_id(name, tag)
+        icon = client.profile_icon(account["puuid"]) if account else None
+    except Exception as e:
+        raise HTTPException(502, friendly_error(e))
+    if not account or icon is None:
+        raise HTTPException(404, f"找不到 {riot_id}，请检查名字和 # 后面的标签")
+    return {"puuid": account["puuid"], "riot_id": f"{account['gameName']}#{account['tagLine']}",
+            "profile_icon_id": icon}
+
+
+if os.environ.get("DUO_FAKE_RIOT"):
+    class FakeIcon(BaseModel):
+        riot_id: str
+        icon: int
+
+    @app.post("/api/fake/icon")
+    def fake_set_icon(req: FakeIcon):
+        """End-to-end tests only: stands in for the player changing their icon in the client."""
+        riot_client().set_icon(*service.parse_riot_id(req.riot_id), req.icon)
+        return {"ok": True}
+
+
 class Pick(BaseModel):
     champion: str
     position: str

@@ -31,6 +31,7 @@ def _puuid(name, tag):
 class FakeRiotClient:
     def __init__(self):
         self.names = {}
+        self.icons = {}   # puuid -> icon set through set_icon, as if changed in the client
 
     def _player(self, puuid):
         rng = _rng("player", puuid)
@@ -44,6 +45,12 @@ class FakeRiotClient:
         puuid = _puuid(name, tag)
         self.names[puuid] = (name, tag)
         return {"puuid": puuid, "gameName": name, "tagLine": tag}
+
+    def profile_icon(self, puuid):
+        return self.icons.get(puuid, _rng("icon", puuid).randrange(29))
+
+    def set_icon(self, name, tag, icon):
+        self.icons[_puuid(name, tag)] = icon
 
     def solo_entry(self, puuid):
         return {"queueType": "RANKED_SOLO_5x5", "tier": self._player(puuid)["tier"], "rank": "II",
