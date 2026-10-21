@@ -145,7 +145,7 @@ export const blockMember = (to: string) => call<{ ok: true }>("/api/blocks", { m
 export const reportMember = (to: string, reason: string, detail: string) =>
   call<{ ok: true }>("/api/reports", { method: "POST", body: JSON.stringify({ to, reason, detail }) });
 export const saveDeckFilter = (filter: DeckFilter) =>
-  call<{ filter: DeckFilter }>("/api/deck/filter", { method: "POST", body: JSON.stringify(filter) });
+  call<Deck>("/api/deck/filter", { method: "POST", body: JSON.stringify(filter) });
 export const setLooking = (on: boolean) =>
   call<{ looking_until: string | null }>("/api/looking", { method: "POST", body: JSON.stringify({ on }) });
 export const saveSelfReport = (r: SelfReport) =>

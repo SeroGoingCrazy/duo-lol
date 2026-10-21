@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
 import {
   ApiError, blockMember, cancelMutualLike, ensurePlayer, getDeck, listChampions, postSwipe, reportMember, saveSelfReport,
-  saveDeckFilter, setLooking, undoSwipe, type DeckCard, type Player,
+  saveDeckFilter, setLooking, undoSwipe, type Deck, type DeckCard, type Player,
 } from "@/lib/api";
 import { isFiltered, LOOKING_HOURS, type DeckFilter } from "@/lib/profile";
 import type { Swipe } from "@/lib/deck";
@@ -18,7 +18,8 @@ import { REPORT_REASONS } from "@/lib/reportReasons";
 import { useChampionInfo } from "@/lib/useChampionInfo";
 import { useT } from "@/components/LangProvider";
 
-const RETRY_MAX_S = 600;   // an empty 牌堆 retries with 1.5x backoff up to this (PRD-v2 §2.1)
+const RETRY_MAX_S = 600;
+const FILTER_DEBOUNCE_MS = 400;   // a burst of chip clicks makes one save and one re-score   // an empty 牌堆 retries with 1.5x backoff up to this (PRD-v2 §2.1)
 
 /** 找搭子 for a bound 会员 who 同意被推荐: real 喜欢 / 跳过 against other 会员 (PRD-v2 §3.2-3.4). */
 export default function MemberDeck({ riotId }: { riotId: string }) {
@@ -43,11 +44,12 @@ export default function MemberDeck({ riotId }: { riotId: string }) {
   const me = useRef<Player | null>(null);
   const latest = useRef(0);   // filter changes can overlap: only the newest deck request may land
 
-  const load = useCallback(async (quiet = false) => {
+  /** Fetch and show the 牌堆; fetchDeck replaces the plain GET (a filter save returns the deck it gives). */
+  const load = useCallback(async (quiet = false, fetchDeck?: () => Promise<Deck>, onFail?: () => void) => {
     if (!quiet) setLoading({});
     const seq = ++latest.current;
     try {
-      const d = await getDeck();
+      const d = await (fetchDeck ?? getDeck)();
       if (seq !== latest.current) return;
       setCards(d.cards); setTotal(d.cards.length); setLikers(new Set(d.likes_you)); setMutual(d.mutual);
       setLikesLeft(d.likes_remaining); setCanUndo(d.can_undo); setNeedPicks(null); setError("");
@@ -60,6 +62,7 @@ export default function MemberDeck({ riotId }: { riotId: string }) {
       } else b.wait = 0;
     } catch (e) {
       if (seq !== latest.current) return;
+      onFail?.();
       if (e instanceof ApiError && e.status === 422 && me.current) setNeedPicks(me.current);
       else setError(e instanceof ApiError ? e.message : String(e));
     } finally {
@@ -123,9 +126,22 @@ export default function MemberDeck({ riotId }: { riotId: string }) {
     }
   }
 
-  async function changeFilter(f: DeckFilter) {
+  // Chips update at once; the save waits for a pause in clicking, and saves go out one at a time so the
+  // last one is what the server keeps. A failed save puts the chips back to what the server has.
+  const saved = useRef<DeckFilter | null>(null);
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saving = useRef<Promise<unknown>>(Promise.resolve());
+  useEffect(() => { if (filter && !saveTimer.current) saved.current = filter; }, [filter]);
+  useEffect(() => () => { if (saveTimer.current) clearTimeout(saveTimer.current); }, []);
+  function changeFilter(f: DeckFilter) {
     setFilter(f);
-    try { await saveDeckFilter(f); await load(); } catch (e) { setError(e instanceof ApiError ? e.message : String(e)); }
+    latest.current++;   // a deck still loading for the old filter must not land
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => {
+      saveTimer.current = null;
+      const run = () => load(false, () => saveDeckFilter(f), () => setFilter(saved.current));
+      saving.current = saving.current.then(run, run);
+    }, FILTER_DEBOUNCE_MS);
   }
 
   const looking = !!lookingUntil && lookingUntil > new Date();

@@ -224,7 +224,6 @@ const EN = new Map<string, string>(Object.entries({
   "下午": "Afternoons",
   "晚上": "Evenings",
   "深夜": "Late nights",
-  "简介里不能写联系方式或 Riot ID，互选后对方才看得到": "Your bio can't contain contact details or a Riot ID; matches see those after you both like each other",
 
   // 牌堆 filters and 现在想打
   "筛选": "Filters",
@@ -284,6 +283,7 @@ const PATTERNS: [RegExp, string][] = [
   [/^还没读到新头像：你现在戴的是 #(\d+)，需要换成 #(\d+)。换好后等几秒再点验证。$/, "We don't see the new icon yet: you wear #$1 and need #$2. Wait a few seconds after switching, then verify."],
   [/^想打的位置最多选 (\d+) 个$/, "Pick at most $1 roles"],
   [/^简介最多 (\d+) 个字$/, "Your bio can be at most $1 characters"],
+  [/^简介里不能写联系方式或 Riot ID（“(.+)”），互选后对方才看得到$/, "Your bio can't contain contact details or a Riot ID (“$1”); matches see those after you both like each other"],
   [/^找不到美服玩家 (.+)$/, "No NA player named $1"],
   [/^找不到 (.+)，请检查名字和 # 后面的标签$/, "Can't find $1; check the name and the tag after #"],
   [/^(.+) 还没有查询过$/, "$1 hasn't been looked up yet"],

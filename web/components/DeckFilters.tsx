@@ -6,14 +6,14 @@ import PositionIcon from "@/components/PositionIcon";
 import { Button } from "@/components/ui/button";
 import { useT } from "@/components/LangProvider";
 import { POSITIONS } from "@/lib/labels";
-import { isFiltered, LANGUAGE_LABELS, LANGUAGES, type DeckFilter } from "@/lib/profile";
+import { isFiltered, LANGUAGE_LABELS, LANGUAGES, toggled, type DeckFilter } from "@/lib/profile";
 
 /** 牌堆 filters (hard filters: they take cards out, never reorder them). Each change is saved and the deck reloads. */
 export default function DeckFilters({ filter, onChange }: { filter: DeckFilter; onChange: (f: DeckFilter) => void }) {
   const t = useT();
   const [open, setOpen] = useState(isFiltered(filter));
   const flip = (key: "positions" | "languages", x: string) =>
-    onChange({ ...filter, [key]: filter[key].includes(x) ? filter[key].filter((y) => y !== x) : [...filter[key], x] });
+    onChange({ ...filter, [key]: toggled(filter[key], x) });
   const group = "flex flex-wrap items-center gap-2";
   const label = "w-full text-xs font-medium text-muted-foreground sm:w-20";
 

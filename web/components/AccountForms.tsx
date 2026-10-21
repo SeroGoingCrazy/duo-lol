@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
 import ChoiceChip from "@/components/ChoiceChip";
 import { POSITIONS } from "@/lib/labels";
-import { BIO_MAX, LANGUAGE_LABELS, LANGUAGES, PLAY_TIME_LABELS, PLAY_TIMES } from "@/lib/profile";
+import { BIO_MAX, LANGUAGE_LABELS, LANGUAGES, PLAY_TIME_LABELS, PLAY_TIMES, toggled, type Voice } from "@/lib/profile";
 import { cn } from "@/lib/utils";
 import { useT } from "@/components/LangProvider";
 
@@ -84,7 +84,7 @@ export function BindRiotCard({ riotId, pending }: {
 /** 偏好: 想打的位置 (up to 2), 同意被推荐 (off by default) and whether 互选 shows the Discord name. */
 export type PrefsValues = {
   positions: string[]; recommendOptIn: boolean; showDiscord: boolean;
-  bio: string; languages: string[]; voice: string | null; playTimes: string[];
+  bio: string; languages: string[]; voice: Voice | null; playTimes: string[];
 };
 
 export function PrefsCard({ verified, prefs, discordName }: {
@@ -101,8 +101,7 @@ export function PrefsCard({ verified, prefs, discordName }: {
   const [state, save, saving] = useActionState(savePrefs, NONE);
   const toggle = (p: string) =>
     setPositions((cur) => (cur.includes(p) ? cur.filter((x) => x !== p) : cur.length < 2 ? [...cur, p] : cur));
-  const flip = (set: React.Dispatch<React.SetStateAction<string[]>>, x: string) =>
-    set((cur) => (cur.includes(x) ? cur.filter((y) => y !== x) : [...cur, x]));
+  const flip = (set: React.Dispatch<React.SetStateAction<string[]>>, x: string) => set((cur) => toggled(cur, x));
   const legend = "mb-2 text-xs font-medium text-muted-foreground";
 
   return (

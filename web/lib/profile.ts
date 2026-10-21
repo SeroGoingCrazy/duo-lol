@@ -20,23 +20,40 @@ export type MemberProfile = {
 export type DeckFilter = { positions: string[]; languages: string[]; voice: boolean; looking_now: boolean };
 export const NO_FILTER: DeckFilter = { positions: [], languages: [], voice: false, looking_now: false };
 
-/** A 简介 must not carry a way to reach someone before 互选 (PRD-v2 §3.3): links, @handles, emails, Riot IDs. */
-const CONTACT = [/https?:\/\/|www\.|discord\.gg|\.com\b|\.gg\b/i, /@\w/, /\S#\s?\w{2,5}\b/, /\b(discord|disc|dc|ig|instagram|twitter|snap|wechat|微信|qq)\s*[:：]/i];
+/** A 简介 must not carry a way to reach someone before 互选 (PRD-v2 §3.3): links, @handles, emails, Riot IDs,
+ *  or a messaging app followed by a name. Cards also have 举报 for what slips through. */
+const CONTACT = [
+  /https?:\/\/|www\.|discord\.gg|\w\.(com|gg|io|me|net|org|tv)\b/i,
+  /@\w/,
+  /[\p{L}\p{N}]\s?#[\p{L}\p{N}]{3,5}(?![\p{L}\p{N}])/u,   // name#tag; "C# dev" or "top#10" are fine
+  /(?<![\p{L}\p{N}])(discord|dc|ig|insta|instagram|twitter|snap|snapchat|tiktok|telegram|whatsapp|line|kakao|wechat|微信|vx|qq)(?![\p{L}\p{N}])\s*[:：]?\s*[\w.]*\d[\w.]*/iu,
+];
 
 export function bioProblem(bio: string): string | null {
   if (bio.length > BIO_MAX) return `简介最多 ${BIO_MAX} 个字`;
-  if (CONTACT.some((re) => re.test(bio))) return "简介里不能写联系方式或 Riot ID，互选后对方才看得到";
+  for (const re of CONTACT) {
+    const m = re.exec(bio);
+    if (!m) continue;
+    // quote the whole words around the match, so the 会员 can find it
+    const start = bio.slice(0, m.index).search(/\S*$/);
+    const end = m.index + m[0].length + (bio.slice(m.index + m[0].length).match(/^\S*/)?.[0].length ?? 0);
+    return `简介里不能写联系方式或 Riot ID（“${bio.slice(start, end).trim()}”），互选后对方才看得到`;
+  }
   return null;
 }
 
-const pick = <T extends string>(xs: unknown, allowed: readonly T[]) =>
-  (Array.isArray(xs) ? xs : []).filter((x): x is T => (allowed as readonly string[]).includes(x as string));
+/** The items of xs that are in allowed, once each. */
+export const pick = <T extends string>(xs: unknown, allowed: readonly T[]) =>
+  [...new Set((Array.isArray(xs) ? xs : []).filter((x): x is T => (allowed as readonly string[]).includes(x as string)))];
+
+/** xs with x added, or removed if it was there. */
+export const toggled = <T,>(xs: T[], x: T) => (xs.includes(x) ? xs.filter((y) => y !== x) : [...xs, x]);
 
 /** Whatever came in, as a valid DeckFilter. */
 export function cleanFilter(f: Partial<DeckFilter> | null | undefined, positions: readonly string[]): DeckFilter {
   return {
-    positions: [...new Set(pick(f?.positions, positions))],
-    languages: [...new Set(pick(f?.languages, LANGUAGES))],
+    positions: pick(f?.positions, positions),
+    languages: pick(f?.languages, LANGUAGES),
     voice: f?.voice === true,
     looking_now: f?.looking_now === true,
   };

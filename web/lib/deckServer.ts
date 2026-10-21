@@ -7,7 +7,7 @@ import { pythonFetch } from "@/lib/pythonApi";
 import { POSITIONS, riotIdKey, type DeckCard, type Partner, type SelfReport } from "@/lib/api";
 import { SELF_REPORT_TIERS } from "@/lib/labels";
 import { REPORT_REASONS } from "@/lib/reportReasons";
-import { cleanFilter, LOOKING_HOURS, passes, type DeckFilter, type MemberProfile } from "@/lib/profile";
+import { cleanFilter, isFiltered, LOOKING_HOURS, passes, type DeckFilter, type MemberProfile } from "@/lib/profile";
 
 export const DAILY_LIKES = 100;        // §8: a cap against liking everyone; it never affects the order
 export const ACTIVE_DAYS = 14;         // §3.2: only 会员 seen in the last 14 days are dealt
@@ -148,16 +148,16 @@ export async function deck() {
   return {
     cards, likes_you: cards.filter((c) => likers.has(c.id)).map((c) => c.id), mutual: mutualCards,
     likes_remaining: DAILY_LIKES - (await likesToday(db, me.id)), can_undo: lastPass !== null,
-    retry_after: cards.length === 0 ? 60 : null, filter, looking_until: prefs?.lookingUntil ?? null,
+    // an empty deck refills as 会员 join; slower when my own filters emptied it
+    retry_after: cards.length === 0 ? (isFiltered(filter) ? 300 : 60) : null, filter, looking_until: prefs?.lookingUntil ?? null,
   };
 }
 
-/** POST /api/deck/filter: save my 牌堆 filters; the next GET /api/deck applies them. */
+/** POST /api/deck/filter: save my 牌堆 filters and return the 牌堆 they give. */
 export async function setFilter(f: Partial<DeckFilter>) {
   const { me, db } = await swiper();
-  const deckFilter = cleanFilter(f, POSITIONS);
-  await db.update(memberPrefs).set({ deckFilter }).where(eq(memberPrefs.memberId, me.id));
-  return { filter: deckFilter };
+  await db.update(memberPrefs).set({ deckFilter: cleanFilter(f, POSITIONS) }).where(eq(memberPrefs.memberId, me.id));
+  return deck();
 }
 
 /** POST /api/looking: 现在想打 on for LOOKING_HOURS, or off. */
