@@ -10,12 +10,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
 import { POSITIONS } from "@/lib/labels";
 import { cn } from "@/lib/utils";
+import { useT } from "@/components/LangProvider";
 
 const NONE: ActionState = {};
 
 function Feedback({ state }: { state: ActionState }) {
-  if (state.error) return <Alert variant="error" className="mt-3">{state.error}</Alert>;
-  if (state.ok) return <p className="mt-3 text-sm text-good" role="status">{state.ok}</p>;
+  const t = useT();
+  if (state.error) return <Alert variant="error" className="mt-3">{t.api(state.error)}</Alert>;
+  if (state.ok) return <p className="mt-3 text-sm text-good" role="status">{t.api(state.ok)}</p>;
   return null;
 }
 
@@ -25,16 +27,17 @@ export function BindRiotCard({ riotId, pending }: {
   pending: { riotId: string; iconId: number; iconUrl: string } | null;
 }) {
   const [id, setId] = useState("");
+  const t = useT();
   const [started, start, starting] = useActionState(startVerification, NONE);
   const [checked, check, checking] = useActionState(checkVerification, NONE);
 
   if (riotId) {
     return (
       <Card data-testid="bind-riot">
-        <CardTitle>Riot 账号</CardTitle>
+        <CardTitle>{t("Riot 账号")}</CardTitle>
         <div className="flex items-center gap-2">
           <span className="font-semibold" data-testid="bound-riot-id">{riotId}</span>
-          <Badge className="bg-good/15 text-good"><BadgeCheck className="size-3.5" />已验证</Badge>
+          <Badge className="bg-good/15 text-good"><BadgeCheck className="size-3.5" />{t("已验证")}</Badge>
         </div>
         <Feedback state={checked} />
       </Card>
@@ -44,18 +47,18 @@ export function BindRiotCard({ riotId, pending }: {
   if (pending) {
     return (
       <Card data-testid="bind-riot">
-        <CardTitle>验证 {pending.riotId}</CardTitle>
+        <CardTitle>{t("验证 {id}", { id: pending.riotId })}</CardTitle>
         <div className="flex items-center gap-4">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={pending.iconUrl} alt={`召唤师头像 #${pending.iconId}`} width={64} height={64} className="rounded-lg border" />
+          <img src={pending.iconUrl} alt={t("召唤师头像 #{n}", { n: pending.iconId })} width={64} height={64} className="rounded-lg border" />
           <div className="text-sm">
-            <p>在游戏客户端里把召唤师头像换成这个（<b data-testid="challenge-icon">#{pending.iconId}</b>，所有账号都有），换好后点验证。</p>
-            <p className="mt-1 text-xs text-muted-foreground">10 分钟内有效。验证成功后可以换回原来的头像。</p>
+            <p>{t("在游戏客户端里把召唤师头像换成这个（")}<b data-testid="challenge-icon">#{pending.iconId}</b>{t("，所有账号都有），换好后点验证。")}</p>
+            <p className="mt-1 text-xs text-muted-foreground">{t("10 分钟内有效。验证成功后可以换回原来的头像。")}</p>
           </div>
         </div>
         <div className="mt-5 flex flex-wrap gap-2">
-          <form action={check}><Button disabled={checking}>{checking ? "验证中…" : "验证"}</Button></form>
-          <form action={cancelVerification}><Button variant="ghost">换一个 Riot ID</Button></form>
+          <form action={check}><Button disabled={checking}>{checking ? t("验证中…") : t("验证")}</Button></form>
+          <form action={cancelVerification}><Button variant="ghost">{t("换一个 Riot ID")}</Button></form>
         </div>
         <Feedback state={checked} />
       </Card>
@@ -64,13 +67,13 @@ export function BindRiotCard({ riotId, pending }: {
 
   return (
     <Card data-testid="bind-riot">
-      <CardTitle>绑定 Riot 账号</CardTitle>
+      <CardTitle>{t("绑定 Riot 账号")}</CardTitle>
       <form action={start} className="flex flex-wrap items-start gap-3">
         <input type="hidden" name="riot_id" value={id} />
-        <RiotIdField label="你的 Riot ID" placeholder="Name#NA1" value={id} onChange={setId} />
-        <Button className="mt-5 w-full sm:w-auto" disabled={starting || !id.trim()}>{starting ? "查询中…" : "下一步"}</Button>
+        <RiotIdField label={t("你的 Riot ID")} placeholder="Name#NA1" value={id} onChange={setId} />
+        <Button className="mt-5 w-full sm:w-auto" disabled={starting || !id.trim()}>{starting ? t("查询中…") : t("下一步")}</Button>
       </form>
-      <p className="mt-3 text-xs text-muted-foreground">只能绑定美服账号。为了确认账号是你的，下一步会请你换一个指定的召唤师头像。</p>
+      <p className="mt-3 text-xs text-muted-foreground">{t("只能绑定美服账号。为了确认账号是你的，下一步会请你换一个指定的召唤师头像。")}</p>
       <Feedback state={started} />
     </Card>
   );
@@ -83,19 +86,20 @@ export function PrefsCard({ verified, prefs, discordName }: {
   discordName: string;
 }) {
   const [positions, setPositions] = useState(prefs.positions);
+  const t = useT();
   const [state, save, saving] = useActionState(savePrefs, NONE);
   const toggle = (p: string) =>
     setPositions((cur) => (cur.includes(p) ? cur.filter((x) => x !== p) : cur.length < 2 ? [...cur, p] : cur));
 
   return (
     <Card data-testid="prefs">
-      <CardTitle>偏好</CardTitle>
+      <CardTitle>{t("偏好")}</CardTitle>
       {!verified ? (
-        <p className="text-sm text-muted-foreground">绑定 Riot 账号后才能设置偏好、进入推荐池。</p>
+        <p className="text-sm text-muted-foreground">{t("绑定 Riot 账号后才能设置偏好、进入推荐池。")}</p>
       ) : (
         <form action={save} className="space-y-4">
           <fieldset>
-            <legend className="mb-2 text-xs font-medium text-muted-foreground">想打的位置（最多 2 个）</legend>
+            <legend className="mb-2 text-xs font-medium text-muted-foreground">{t("想打的位置（最多 2 个）")}</legend>
             <div className="flex flex-wrap gap-2">
               {POSITIONS.map((p) => {
                 const on = positions.includes(p);
@@ -113,13 +117,13 @@ export function PrefsCard({ verified, prefs, discordName }: {
           </fieldset>
           <label className="flex items-start gap-2 text-sm">
             <input type="checkbox" name="recommend_opt_in" defaultChecked={prefs.recommendOptIn} className="mt-1" />
-            <span>同意被推荐<span className="block text-xs text-muted-foreground">勾选后你会出现在别人的牌堆里；随时可以关掉，关掉后立刻退出推荐池。</span></span>
+            <span>{t("同意被推荐")}<span className="block text-xs text-muted-foreground">{t("勾选后你会出现在别人的牌堆里；随时可以关掉，关掉后立刻退出推荐池。")}</span></span>
           </label>
           <label className="flex items-start gap-2 text-sm">
             <input type="checkbox" name="show_discord" defaultChecked={prefs.showDiscord} className="mt-1" />
-            <span>互选后给对方看我的 Discord 名（{discordName}）<span className="block text-xs text-muted-foreground">不勾选的话，对方只看到你的 Riot ID。</span></span>
+            <span>{t("互选后给对方看我的 Discord 名（{name}）", { name: discordName })}<span className="block text-xs text-muted-foreground">{t("不勾选的话，对方只看到你的 Riot ID。")}</span></span>
           </label>
-          <Button disabled={saving}>{saving ? "保存中…" : "保存"}</Button>
+          <Button disabled={saving}>{saving ? t("保存中…") : t("保存")}</Button>
         </form>
       )}
       <Feedback state={state} />
@@ -130,18 +134,19 @@ export function PrefsCard({ verified, prefs, discordName }: {
 /** 注销: removes the 会员 and everything stored about them on this site. */
 export function DeleteAccountCard() {
   const [confirming, setConfirming] = useState(false);
+  const t = useT();
   return (
     <Card data-testid="delete-account">
-      <CardTitle>注销账号</CardTitle>
-      <p className="text-sm text-muted-foreground">删除你的会员资料、绑定和偏好，不能恢复。查组合缓存的公开对局数据不受影响。</p>
+      <CardTitle>{t("注销账号")}</CardTitle>
+      <p className="text-sm text-muted-foreground">{t("删除你的会员资料、绑定和偏好，不能恢复。查组合缓存的公开对局数据不受影响。")}</p>
       <div className="mt-4 flex flex-wrap gap-2">
         {confirming ? (
           <>
-            <form action={deleteAccount}><Button className="bg-bad text-white hover:bg-bad/90">确认注销</Button></form>
-            <Button variant="ghost" onClick={() => setConfirming(false)}>取消</Button>
+            <form action={deleteAccount}><Button className="bg-bad text-white hover:bg-bad/90">{t("确认注销")}</Button></form>
+            <Button variant="ghost" onClick={() => setConfirming(false)}>{t("取消")}</Button>
           </>
         ) : (
-          <Button variant="outline" onClick={() => setConfirming(true)}>注销账号</Button>
+          <Button variant="outline" onClick={() => setConfirming(true)}>{t("注销账号")}</Button>
         )}
       </div>
     </Card>

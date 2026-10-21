@@ -15,6 +15,7 @@ export default defineConfig({
   workers: 1,   // the specs share one app database, and 牌堆 counts depend on who else is in the 推荐池
   timeout: 60_000,
   use: {
+    locale: "zh-CN",   // the specs read the Chinese text; english.spec.ts switches to en-US
     baseURL: "http://127.0.0.1:3100",
     // lets tests call the Python API directly (fake icon changes); the site adds its own header server-side
     extraHTTPHeaders: { "x-duo-internal": INTERNAL },

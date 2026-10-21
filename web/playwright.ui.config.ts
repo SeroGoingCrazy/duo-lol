@@ -5,6 +5,7 @@ export default defineConfig({
   testDir: "./e2e",
   testMatch: "*-ui.spec.ts",
   use: {
+    locale: "zh-CN",   // the specs read the Chinese text; english.spec.ts switches to en-US
     baseURL: "http://127.0.0.1:3100",
     channel: process.env.PW_CHANNEL || undefined,
   },
