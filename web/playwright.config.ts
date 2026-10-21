@@ -11,6 +11,7 @@ const chromium = "/opt/pw-browsers/chromium";
 export default defineConfig({
   testDir: "./e2e",
   testIgnore: "**/*-ui.spec.ts",
+  workers: 1,   // the specs share one app database, and 牌堆 counts depend on who else is in the 推荐池
   timeout: 60_000,
   use: {
     baseURL: "http://127.0.0.1:3100",
@@ -26,7 +27,7 @@ export default defineConfig({
     },
     {
       command: `rm -rf ${APP_DB} && npm run build && npx next start -p 3100`,
-      env: { DUO_API_URL: "http://127.0.0.1:8100", DUO_NEXT_DIST_DIR: ".next-e2e", APP_DB_DIR: APP_DB, AUTH_SECRET: "e2e-only-secret", AUTH_DEV_LOGIN: "1" },
+      env: { DUO_API_URL: "http://127.0.0.1:8100", DUO_NEXT_DIST_DIR: ".next-e2e", APP_DB_DIR: APP_DB, AUTH_SECRET: "e2e-only-secret", AUTH_DEV_LOGIN: "1", ADMIN_ACCOUNTS: "dev:admin" },
       url: "http://127.0.0.1:3100",
       timeout: 180_000,
       reuseExistingServer: false,

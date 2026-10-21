@@ -120,7 +120,7 @@ def test_deck_returns_the_whole_ranked_pool(client):
 
 def test_recommendations_top5_duo_eligible(client):
     lookup(client, "Alpha#NA1")
-    out = client.get("/api/recommendations/Alpha%23NA1").json()
+    out = client.post("/api/recommendations", json={"riot_id": "Alpha#NA1"}).json()
     me = (out["me"]["tier"], out["me"]["division"], out["me"]["league_points"])
     with db.connect(DB) as conn:
         ranks = {riot_id: rank for _, riot_id, rank, _ in recommend.candidate_pool(conn)}
@@ -130,7 +130,7 @@ def test_recommendations_top5_duo_eligible(client):
     for p in out["partners"]:
         assert recommend.can_duo(me, ranks[p["riot_id"]])
         assert p["riot_id"] != out["me"]["riot_id"]
-        assert set(p) == {"riot_id", "tier", "division", "win_rate", "win_rate_delta", "score", "roles",
+        assert set(p) == {"puuid", "riot_id", "tier", "division", "win_rate", "win_rate_delta", "score", "roles",
                           "top_pairs", "reasons"}
         assert 1 <= len(p["top_pairs"]) <= 3
 
@@ -153,6 +153,40 @@ def test_find_partners_with_self_report(client):
     picks = [{"champion": "Ahri", "position": "MIDDLE"}]
     out = client.post("/api/recommendations", json={"riot_id": "NewTwo#NA1", "self_report": {"picks": picks}}).json()
     assert out["partners"] and any("自选英雄" in n for n in out["notes"])
+
+
+def test_deck_limited_to_candidates(client):
+    """The site sends the 会员 that pass its filters; only they are scored, matched by puuid or Riot ID."""
+    lookup(client, "Alpha#NA1")
+    pool = client.post("/api/recommendations", json={"riot_id": "Alpha#NA1", "limit": 200}).json()["partners"]
+    first, second = pool[0], pool[1]
+    stale = {"puuid": "puuid-under-an-old-key", "riot_id": second["riot_id"].upper()}
+    out = client.post("/api/recommendations", json={
+        "riot_id": "Alpha#NA1", "limit": 200,
+        "candidates": [{"puuid": first["puuid"], "riot_id": first["riot_id"]}, stale]}).json()["partners"]
+    assert [p["riot_id"] for p in out] == [first["riot_id"], second["riot_id"]]
+    empty = client.post("/api/recommendations", json={"riot_id": "Alpha#NA1", "candidates": []}).json()
+    assert empty["partners"] == []
+
+
+def test_exclude_hides_members_from_the_public_pool(client):
+    lookup(client, "Alpha#NA1")
+    pool = client.post("/api/recommendations", json={"riot_id": "Alpha#NA1", "limit": 200}).json()["partners"]
+    hide = [pool[0]["puuid"], pool[1]["riot_id"].upper()]
+    out = client.post("/api/recommendations", json={"riot_id": "Alpha#NA1", "limit": 200, "exclude": hide}).json()
+    assert [p["riot_id"] for p in out["partners"]] == [p["riot_id"] for p in pool[2:]]
+
+
+def test_deck_scores_a_data_poor_candidate_from_self_report(client):
+    lookup(client, "Alpha#NA1")
+    newbie = lookup(client, "NewThree#NA1")["player"]
+    assert newbie["insufficient_data"]
+    cand = {"puuid": "x", "riot_id": "NewThree#NA1"}
+    ask = {"riot_id": "Alpha#NA1", "limit": 200}
+    assert client.post("/api/recommendations", json={**ask, "candidates": [cand]}).json()["partners"] == []
+    cand["self_report"] = {"tier": "GOLD", "picks": [{"champion": "Ahri", "position": "MIDDLE"}]}
+    out = client.post("/api/recommendations", json={**ask, "candidates": [cand]}).json()["partners"]
+    assert [p["riot_id"] for p in out] == [newbie["riot_id"]]
 
 
 def test_score_follows_fitted_normal(client):

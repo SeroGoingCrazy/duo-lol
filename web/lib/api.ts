@@ -125,3 +125,25 @@ export function riotIdProblem(id: string): string | null {
 export const pct = (x: number) => `${(x * 100).toFixed(1)}%`;
 /** 胜率差 in percentage points, e.g. "0.4 个百分点". */
 export const points = (x: number) => `${Math.abs(x * 100).toFixed(1)} 个百分点`;
+
+/** One 卡片 in a 牌堆. id is the 会员 id (or the Riot ID key in the demo); riot_id only after 互选. */
+export type DeckCard = Omit<Partner, "riot_id"> & { id: string; riot_id?: string; discord?: string | null };
+
+// 会员 牌堆 (PRD-v2 §6.1), served by Next itself rather than the Python API.
+export type Deck = {
+  cards: DeckCard[]; likes_you: string[]; mutual: DeckCard[];
+  likes_remaining: number; can_undo: boolean; retry_after: number | null;
+};
+export type SwipeResult = { mutual_like: boolean; match: { riot_id: string; discord: string | null } | null; likes_remaining: number };
+
+export const getDeck = () => call<Deck>("/api/deck", { cache: "no-store" });
+export const postSwipe = (to: string, action: "like" | "pass") =>
+  call<SwipeResult>("/api/swipes", { method: "POST", body: JSON.stringify({ to, action }) });
+export const undoSwipe = () => call<{ undone: string }>("/api/swipes/undo", { method: "POST" });
+export const cancelMutualLike = (other: string) =>
+  call<{ ok: true }>("/api/mutual-likes", { method: "DELETE", body: JSON.stringify({ with: other }) });
+export const blockMember = (to: string) => call<{ ok: true }>("/api/blocks", { method: "POST", body: JSON.stringify({ to }) });
+export const reportMember = (to: string, reason: string, detail: string) =>
+  call<{ ok: true }>("/api/reports", { method: "POST", body: JSON.stringify({ to, reason, detail }) });
+export const saveSelfReport = (r: SelfReport) =>
+  call<{ ok: true }>("/api/self-report", { method: "POST", body: JSON.stringify(r) });

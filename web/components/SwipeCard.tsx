@@ -7,7 +7,7 @@ import PositionIcon from "@/components/PositionIcon";
 import ScoreBadge, { ScoreHelp, scoreSummary } from "@/components/ScoreBadge";
 import { Badge } from "@/components/ui/badge";
 import { CardTitle } from "@/components/ui/card";
-import { pct, points, type Partner } from "@/lib/api";
+import { pct, points, type DeckCard } from "@/lib/api";
 import type { ChampionInfo } from "@/lib/champions";
 import type { Swipe } from "@/lib/deck";
 import { POSITION_LABELS, positionLabel, tierLabel } from "@/lib/labels";
@@ -27,7 +27,7 @@ function localizeReason(text: string, info: Record<string, ChampionInfo>, champi
 
 /** 卡片 (CONTEXT.md): three pages flipped like Tinder's photos. Riot ID stays hidden until 互选. */
 export default function SwipeCard({ p, info, fling, onSwiped, onSwipeStart, likesYou = false }: {
-  p: Partner;
+  p: DeckCard;
   info: Record<string, ChampionInfo>;
   fling: Swipe | null;               // set by the buttons or arrow keys to throw the card out
   onSwiped: (s: Swipe) => void;
