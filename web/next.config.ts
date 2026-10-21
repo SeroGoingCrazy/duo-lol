@@ -11,8 +11,10 @@ export default function config(phase: string): NextConfig {
     serverExternalPackages: ["@electric-sql/pglite"],
     // Builds and test servers must not overwrite a running developer's chunks.
     distDir: process.env.DUO_NEXT_DIST_DIR ?? (phase === PHASE_DEVELOPMENT_SERVER ? ".next-dev" : ".next"),
+    // fallback runs after every route, dynamic ones included, so /api/auth/[...nextauth] is served
+    // by Next and only the remaining /api/* goes to Python.
     async rewrites() {
-      return [{ source: "/api/:path*", destination: `${API_URL}/api/:path*` }];
+      return { beforeFiles: [], afterFiles: [], fallback: [{ source: "/api/:path*", destination: `${API_URL}/api/:path*` }] };
     },
   };
 }
