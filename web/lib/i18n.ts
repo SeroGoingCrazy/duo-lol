@@ -7,11 +7,10 @@ export type Lang = "zh" | "en";
 export const LANGS: Lang[] = ["zh", "en"];
 export const LANG_COOKIE = "lang";
 
-/** First match in Accept-Language: Chinese for zh*, English for everything else (the site serves NA). */
-export function pickLang(cookie: string | undefined, acceptLanguage: string | null): Lang {
-  if (cookie === "zh" || cookie === "en") return cookie;
-  const first = (acceptLanguage ?? "").split(",")[0]?.trim().toLowerCase() ?? "";
-  return first.startsWith("zh") ? "zh" : "en";
+/** The 中文 / English switch in the nav sets the cookie; without it the site is in 中文 (Jacky, 2026-10-21:
+ *  English picked from the browser language came as a surprise). */
+export function pickLang(cookie: string | undefined): Lang {
+  return cookie === "en" ? "en" : "zh";
 }
 
 const EN = new Map<string, string>(Object.entries({
