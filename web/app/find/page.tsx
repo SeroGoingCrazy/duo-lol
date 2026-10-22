@@ -19,9 +19,9 @@ export default async function FindPage() {
   const [row] = await db.select().from(schema.members).leftJoin(schema.memberPrefs, eq(schema.memberPrefs.memberId, schema.members.id))
     .where(eq(schema.members.id, id));
   const me = row?.members;
-  if (me?.verifiedAt && me.riotId && row.member_prefs?.recommendOptIn && !me.suspendedAt) return <MemberDeck riotId={me.riotId} />;
+  if (me?.boundAt && me.riotId && row.member_prefs?.recommendOptIn && !me.suspendedAt) return <MemberDeck riotId={me.riotId} />;
   const missing = me?.suspendedAt ? t("你的账号因被举报暂停推荐，等待管理员处理。")
-    : !me?.verifiedAt ? t("先在我的账号里绑定 Riot 账号，")
+    : !me?.boundAt ? t("先在我的账号里绑定 Riot 账号，")
     : t("先在我的账号里开启“同意被推荐”，");
   return <DemoDeck notice={<>{t("这是演示版。")}{missing}{!me?.suspendedAt && <><Link href="/account">{t("去我的账号")}</Link>{t("，完成后就能和真实会员互滑。")}</>}</>} />;
 }

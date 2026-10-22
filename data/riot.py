@@ -119,7 +119,7 @@ class RiotClient:
         return next((e for e in entries if e.get("queueType") == SOLO_QUEUE), None)
 
     def profile_icon(self, puuid):
-        """The summoner icon id the player has on right now (头像验证, ADR-0005)."""
+        """The summoner icon id the player has on right now (the 会员's default 头像, ADR-0011)."""
         summoner = self.get(f"{PLATFORM}/lol/summoner/v4/summoners/by-puuid/{puuid}")
         return summoner["profileIconId"] if summoner else None
 

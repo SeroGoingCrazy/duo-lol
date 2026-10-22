@@ -10,6 +10,7 @@ import { SELF_REPORT_TIERS } from "@/lib/labels";
 import { REPORT_REASONS } from "@/lib/reportReasons";
 import { sendDiscordDm } from "@/lib/discordNotify";
 import { cleanFilter, isFiltered, LOOKING_HOURS, passes, type DeckFilter, type MemberProfile } from "@/lib/profile";
+import { avatarUrls } from "@/lib/profileIcons";
 
 export const DAILY_LIKES = 100;        // §8: a cap against liking everyone; it never affects the order
 export const ACTIVE_DAYS = 14;         // §3.2: only 会员 seen in the last 14 days are dealt
@@ -36,7 +37,7 @@ export async function swiper({ forSafety = false } = {}) {
     .where(eq(members.id, id));
   if (!row) throw new DeckError(401, "请先登录", "login");
   const { members: me, member_prefs: prefs } = row;
-  if (!me.verifiedAt || !me.puuid || !me.riotId) throw new DeckError(403, "先在我的账号里绑定 Riot 账号", "unverified");
+  if (!me.boundAt || !me.puuid || !me.riotId) throw new DeckError(403, "先在我的账号里绑定 Riot 账号", "unverified");
   if (forSafety) return { me, prefs, db };
   if (!prefs?.recommendOptIn) throw new DeckError(403, "先在我的账号里开启“同意被推荐”，别人才能看到你", "opt_in");
   if (me.suspendedAt) throw new DeckError(403, "你的账号因被举报暂停推荐，等待管理员处理", "suspended");
@@ -113,7 +114,7 @@ export async function deck() {
   const likers = new Set((await db.select({ from: swipes.fromMember }).from(swipes)
     .where(and(eq(swipes.toMember, me.id), eq(swipes.action, "like")))).map((r) => r.from));
 
-  // 推荐池: verified, 同意被推荐, active, not suspended; then my own exclusions.
+  // 推荐池: bound, 同意被推荐, active, not suspended; then my own exclusions.
   const pool = await db.select().from(members).innerJoin(memberPrefs, eq(memberPrefs.memberId, members.id))
     .where(and(eq(memberPrefs.recommendOptIn, true), isNull(members.suspendedAt), gte(members.lastActiveAt, since),
       sql`${members.puuid} is not null`, sql`${members.id} <> ${me.id}`));
@@ -143,13 +144,15 @@ export async function deck() {
   }
   cards.sort((a, b) => b.win_rate - a.win_rate);
   // a 互选 stays listed even if the pair can no longer be scored (say, one of them climbed out of duo range)
+  const avatar = await avatarUrls();
   const mutualCards: DeckCard[] = mutualRows
     .filter((r) => !hidden.has(r.members.id))
     .map((r) => {
       const p = scoredMutual.get(r.members.id);
       const profile = profileOf(r.member_prefs, now);
       return { ...(p ? card(r.members.id, p, profile) : unscored(r.members.id, profile)), riot_id: r.members.riotId!,
-        discord: r.member_prefs.showDiscord ? r.members.name : null };
+        discord: r.member_prefs.showDiscord ? r.members.name : null,
+        avatar: avatar(r.members.avatarIconId), riot_verified: !!r.members.verifiedAt };
     })
     .sort((a, b) => +mutual.get(b.id)! - +mutual.get(a.id)!);
   for (const c of mutualCards) c.duo_record = records.get(c.id) ?? null;
@@ -191,7 +194,10 @@ async function latestPass(db: Db, me: string) {
 async function contact(db: Db, id: string) {
   const [row] = await db.select().from(members).leftJoin(memberPrefs, eq(memberPrefs.memberId, members.id)).where(eq(members.id, id));
   if (!row) return null;   // 注销 a moment ago
-  return { riot_id: row.members.riotId!, discord: row.member_prefs?.showDiscord ? row.members.name : null };
+  return {
+    riot_id: row.members.riotId!, discord: row.member_prefs?.showDiscord ? row.members.name : null,
+    avatar: (await avatarUrls())(row.members.avatarIconId), riot_verified: !!row.members.verifiedAt,
+  };
 }
 
 /** POST /api/swipes: record 喜欢 or 跳过; a 喜欢 back from them makes a 互选 at once (PRD-v2 §2.1). */
@@ -249,7 +255,7 @@ async function duoRecords(me: Member, others: { id: string; riotId: string }[]) 
 export async function unseenCount(memberId: string) {
   const db = await getDb();
   const [row] = await db.select().from(members).leftJoin(memberPrefs, eq(memberPrefs.memberId, members.id)).where(eq(members.id, memberId));
-  if (!row?.members.verifiedAt || !row.member_prefs?.recommendOptIn || row.members.suspendedAt) return 0;
+  if (!row?.members.boundAt || !row.member_prefs?.recommendOptIn || row.members.suspendedAt) return 0;
   const since = row.members.seenAt ?? new Date(0);
   const active = new Date(Date.now() - ACTIVE_DAYS * 86_400_000);
   const blocked = (other: SQLWrapper) => sql`exists (select 1 from ${blocks} where (${blocks.fromMember} = ${memberId} and ${blocks.toMember} = ${other})
@@ -348,6 +354,15 @@ export async function pause(db: Db, target: Member) {
 export async function unpause(db: Db, target: Member) {
   await db.update(members).set({ suspendedAt: null }).where(eq(members.id, target.id));
   if (target.puuid) await db.delete(riotBans).where(eq(riotBans.puuid, target.puuid));
+}
+
+/** 解绑: the 会员 keeps their membership, 偏好 and any pause, but loses the Riot account, its 头像 and their 互选,
+ *  so nobody keeps a Riot ID that is no longer theirs to contact (ADR-0011). */
+export async function releaseRiotAccount(db: Db, memberId: string) {
+  await db.update(mutualLikes).set({ cancelledAt: new Date() })
+    .where(and(isNull(mutualLikes.cancelledAt), or(eq(mutualLikes.memberA, memberId), eq(mutualLikes.memberB, memberId))));
+  await db.update(members).set({ puuid: null, riotId: null, boundAt: null, verifiedAt: null, avatarIconId: null })
+    .where(eq(members.id, memberId));
 }
 
 /** Is this Riot account paused from an earlier membership? Checked when it is bound again. By puuid only:

@@ -3,6 +3,8 @@ import { useState } from "react";
 import { HeartHandshake } from "lucide-react";
 import Link from "next/link";
 import CopyButton from "@/components/CopyButton";
+import { RiotVerifiedBadge } from "@/components/AccountForms";
+import { Avatar } from "@/components/ProfileIconPicker";
 import PositionIcon from "@/components/PositionIcon";
 import { playerPath, type DeckCard } from "@/lib/api";
 import { useT } from "@/components/LangProvider";
@@ -47,9 +49,10 @@ export default function DeckSidebar({ mutual, likes, onOpen, className, disabled
                 {mutual.map((p) => (
                   <li key={p.id} className="rounded-lg border bg-background/40 p-3">
                     <div className="flex items-center gap-3">
+                      {p.avatar !== undefined && <Avatar url={p.avatar} size={36} />}
                       <PositionIcon position={p.roles.b} size={22} />
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1">{p.riot_id ? <Link href={playerPath(p.riot_id)} className="truncate font-medium text-foreground">{p.riot_id}</Link> : null}{p.riot_id && <CopyButton text={p.riot_id} />}</div>
+                        <div className="flex items-center gap-1">{p.riot_id ? <Link href={playerPath(p.riot_id)} className="truncate font-medium text-foreground">{p.riot_id}</Link> : null}{p.riot_id && <CopyButton text={p.riot_id} />}{p.riot_verified === false && <RiotVerifiedBadge verified={false} />}</div>
                         <div className="text-xs text-muted-foreground">{p.discord ? t("Discord：{name}", { name: p.discord }) : t.tier(p.tier, p.division)}</div>
                       </div>
                       {score(p)}

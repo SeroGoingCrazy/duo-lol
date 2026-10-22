@@ -11,10 +11,7 @@ export async function member(browser: Browser, name: string, riotId?: string, op
   await expect(page).toHaveURL(/\/account$/);
   if (!riotId) return page;
   await page.getByLabel("你的 Riot ID").fill(riotId);
-  await page.getByRole("button", { name: "下一步" }).click();
-  const icon = Number((await page.getByTestId("challenge-icon").innerText()).replace("#", ""));
-  await page.request.post(`${API}/api/fake/icon`, { data: { riot_id: riotId, icon } });
-  await page.getByRole("button", { name: "验证" }).click();
+  await page.getByRole("button", { name: "绑定", exact: true }).click();
   await expect(page.getByTestId("bound-riot-id")).toHaveText(riotId);
   if (optIn) await setOptIn(page, true);
   await cached(page, riotId);

@@ -12,9 +12,11 @@ export const members = app.table("members", {
   email: text("email").unique(),
   emailVerified: timestamp("email_verified", { mode: "date" }),
   image: text("image"),
-  puuid: text("puuid").unique(),            // set once 头像验证 passes; one Riot account per 会员
+  puuid: text("puuid").unique(),            // set by 绑定; one Riot account per 会员
   riotId: text("riot_id"),
-  verifiedAt: timestamp("verified_at", { mode: "date" }),
+  boundAt: timestamp("bound_at", { mode: "date" }),          // 绑定: typed their Riot ID (ADR-0011)
+  verifiedAt: timestamp("verified_at", { mode: "date" }),    // Riot proved the account is theirs (old 头像验证, later RSO); null = 未验证
+  avatarIconId: integer("avatar_icon_id"),  // 头像: a summoner icon id, their in-game icon until they pick another
   lastActiveAt: timestamp("last_active_at", { mode: "date" }),
   suspendedAt: timestamp("suspended_at", { mode: "date" }),   // out of every 牌堆 until an admin restores them (§8)
   seenAt: timestamp("seen_at", { mode: "date" }),             // last opened 找搭子: 互选 and 喜欢 after this count as new
@@ -92,15 +94,6 @@ export const reports = app.table("reports", {
   createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   handledAt: timestamp("handled_at", { mode: "date" }),
 }, (t) => [index("reports_to_idx").on(t.toMember)]);
-
-/** 头像验证 in progress: the icon this 会员 was asked to wear on riot_id. */
-export const verificationChallenges = app.table("verification_challenges", {
-  memberId: text("member_id").primaryKey().references(() => members.id, { onDelete: "cascade" }),
-  puuid: text("puuid").notNull(),
-  riotId: text("riot_id").notNull(),
-  iconId: integer("icon_id").notNull(),
-  expiresAt: timestamp("expires_at", { mode: "date" }).notNull(),
-});
 
 /** Riot accounts an admin (or the 3-report rule) paused. Kept after 注销 so re-registering doesn't clear it;
  *  binding the same Riot account again starts paused. */

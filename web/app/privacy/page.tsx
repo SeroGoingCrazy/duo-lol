@@ -19,7 +19,7 @@ export default async function PrivacyPage() {
         <h2 className="font-semibold">我们收集什么</h2>
         <ul className="list-disc space-y-1 pl-5">
           <li><b>Discord 登录</b>：你的 Discord 用户 ID 和用户名，用来登录；互选后是否给对方看用户名由你决定。我们不读取你的邮箱、好友或服务器。</li>
-          <li><b>Riot 账号</b>：你绑定的 Riot ID 和 Riot 提供的账号标识（PUUID）。</li>
+          <li><b>Riot 账号</b>：你绑定的 Riot ID、Riot 提供的账号标识（PUUID），以及你选的召唤师头像编号（默认是你游戏里的头像）。</li>
           <li><b>对局数据</b>：通过 Riot 官方 API 读取的美服单双排公开对局（英雄、位置、胜负、段位），用于计算预测胜率和全服统计。</li>
           <li><b>你在网站上的操作</b>：偏好（想打的位置、简介、语言、开麦、常玩时间、是否同意被推荐、自选英雄）、喜欢和跳过、互选、拉黑和举报，以及最近一次登录时间。</li>
         </ul>
@@ -61,7 +61,7 @@ function PrivacyEn() {
         <h2 className="font-semibold">What we collect</h2>
         <ul className="list-disc space-y-1 pl-5">
           <li><b>Discord login</b>: your Discord user ID and username, to log you in. You decide whether matches see the username. We don&apos;t read your email, friends or servers.</li>
-          <li><b>Riot account</b>: the Riot ID you link and the account identifier (PUUID) Riot provides.</li>
+          <li><b>Riot account</b>: the Riot ID you link, the account identifier (PUUID) Riot provides, and the summoner icon you pick as your avatar (your in-game icon by default).</li>
           <li><b>Match data</b>: public NA Ranked Solo/Duo games read through Riot&apos;s official API (champions, roles, wins, ranks), used to predict win rates and for overall statistics.</li>
           <li><b>What you do here</b>: preferences (roles, bio, languages, voice, play times, whether you want to be recommended, picked champions), likes and passes, matches, blocks and reports, and when you last logged in.</li>
         </ul>
