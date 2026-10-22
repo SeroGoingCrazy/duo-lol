@@ -172,10 +172,10 @@ export default function MemberDeck({ riotId }: { riotId: string }) {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {filter && (
-            <Button variant={looking ? "default" : "outline"} className={looking ? "h-8 gap-2 rounded-full bg-good px-3 text-xs text-white hover:bg-good/90" : "h-8 gap-2 rounded-full px-3 text-xs"}
+            <Button variant={looking ? "default" : "outline"} className={looking ? "h-8 gap-2 rounded-full bg-good bg-none px-3 text-xs text-good-foreground shadow-none hover:bg-good/90" : "h-8 gap-2 rounded-full px-3 text-xs"}
               aria-pressed={looking} onClick={toggleLooking} data-testid="looking-toggle"
               title={looking ? t("{time} 前显示为现在想打，再点一下关掉", { time: lookingUntil!.toLocaleTimeString(t.lang === "en" ? "en-US" : "zh-CN", { hour: "numeric", minute: "2-digit" }) }) : t("别人会在卡片上看到你现在想打，{h} 小时后自动关掉", { h: LOOKING_HOURS })}>
-              <span className={looking ? "size-2 rounded-full bg-white" : "size-2 rounded-full bg-muted-foreground/50"} />{t("现在想打")}
+              <span className={looking ? "size-2 rounded-full bg-good-foreground" : "size-2 rounded-full bg-muted-foreground/50"} />{t("现在想打")}
             </Button>
           )}
           <span className="rounded-full border bg-card px-3 py-1.5 text-xs text-muted-foreground" data-testid="deck-owner">

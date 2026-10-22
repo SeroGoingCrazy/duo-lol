@@ -187,7 +187,7 @@ export function DeleteAccountCard() {
       <div className="mt-4 flex flex-wrap gap-2">
         {confirming ? (
           <>
-            <form action={deleteAccount}><Button className="bg-bad text-white hover:bg-bad/90">{t("确认注销")}</Button></form>
+            <form action={deleteAccount}><Button className="bg-bad bg-none text-white shadow-none hover:bg-bad/90">{t("确认注销")}</Button></form>
             <Button variant="ghost" onClick={() => setConfirming(false)}>{t("取消")}</Button>
           </>
         ) : (

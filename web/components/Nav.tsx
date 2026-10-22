@@ -25,25 +25,25 @@ export default function Nav({ member }: { member: { name: string; admin?: boolea
   }, [member?.name, path]);   // eslint-disable-line react-hooks/exhaustive-deps
   const item = (href: string, label: string, badge = 0) => (
     <Link href={href} aria-current={path === href ? "page" : undefined}
-      className={cn("rounded-md px-3 py-1.5 text-sm no-underline transition-colors",
-        path === href ? "bg-accent font-semibold text-foreground" : "text-muted-foreground hover:text-foreground")}>
+      className={cn("rounded-full px-3 py-1.5 text-sm no-underline transition-colors",
+        path === href ? "bg-linear-to-r from-neon-a/25 to-neon-b/20 font-semibold text-foreground" : "text-muted-foreground hover:text-foreground")}>
       {label}
-      {badge > 0 && <span className="ml-1.5 rounded-full bg-good px-1.5 py-0.5 text-[11px] font-semibold text-white" data-testid="unseen-badge"
+      {badge > 0 && <span className="ml-1.5 rounded-full bg-good px-1.5 py-0.5 text-[11px] font-semibold text-good-foreground" data-testid="unseen-badge"
         aria-label={t("{n} 条新的互选或喜欢", { n: badge })}>{badge > 99 ? "99+" : badge}</span>}
     </Link>
   );
   return (
     <nav className="mb-6 flex flex-wrap items-center gap-1">
-      <span className="mr-3 font-bold tracking-tight">{t("匹配搭子")}</span>
+      <span className="text-neon mr-3 font-black italic tracking-tight">{t("匹配搭子")}</span>
       {item("/", t("查组合"))}
       {item("/find", t("找搭子"), path === "/find" ? 0 : unseen)}
       <div className="ml-auto flex items-center gap-1">
         {/* both languages always visible, the current one highlighted */}
-        <div role="group" aria-label="语言 / Language" className="mr-2 flex rounded-lg border p-0.5" data-testid="lang-switch">
+        <div role="group" aria-label="语言 / Language" className="mr-2 flex rounded-full border p-0.5" data-testid="lang-switch">
           {([["zh", "中文", "zh-CN"], ["en", "English", "en"]] as const).map(([code, label, tag]) => (
             <form key={code} action={setLang.bind(null, code)}>
               <button lang={tag} aria-pressed={t.lang === code} disabled={t.lang === code}
-                className={cn("rounded-md px-2.5 py-1 text-xs transition-colors",
+                className={cn("rounded-full px-2.5 py-1 text-xs transition-colors",
                   t.lang === code ? "bg-accent font-semibold text-foreground" : "cursor-pointer text-muted-foreground hover:text-foreground")}>
                 {label}
               </button>

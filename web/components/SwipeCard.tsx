@@ -145,7 +145,7 @@ export default function SwipeCard({ p, info, fling, onSwiped, onSwipeStart, like
           ))}
         </div>
         <div className="flex items-center gap-4">
-          <div className="flex size-14 shrink-0 items-center justify-center rounded-2xl border border-primary/20 bg-card shadow-sm sm:size-16">
+          <div className="flex size-14 shrink-0 items-center justify-center rounded-2xl border border-neon-a/30 bg-card shadow-[0_0_20px_-6px_var(--neon-a)] sm:size-16">
             <PositionIcon position={p.roles.b} size={38} />
           </div>
           <div className="min-w-0 flex-1">

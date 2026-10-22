@@ -1,38 +1,51 @@
 @import "tailwindcss";
 
-/* Design tokens (shadcn/ui naming). Dark is the default look; light follows the OS setting. */
+/* Design tokens (shadcn/ui naming), "Arcane" look: dusk purple with magenta and cyan neon.
+   Dark is the main look; light follows the OS setting. --neon-a/b/c are the three gradient stops. */
 :root {
-  --background: #f4f6fa;
-  --foreground: #141821;
+  --background: #f6f2fc;
+  --foreground: #1c1230;
   --card: #ffffff;
-  --muted: #eef1f6;
-  --muted-foreground: #5d6677;
-  --border: #dde2ea;
-  --input: #d3d9e3;
-  --primary: #2f6bff;
+  --muted: #efe8fa;
+  --muted-foreground: #6a5c85;
+  --border: #e2d8f2;
+  --input: #d3c5ea;
+  --primary: #b0179a;
   --primary-foreground: #ffffff;
-  --accent: #e8eefc;
-  --good: #14804a;
-  --bad: #c0352b;
-  --gold: #b7791f;
-  --ring: #2f6bff;
+  --accent: #f1e6fb;
+  --good: #087f6c;
+  --good-foreground: #ffffff;
+  --bad: #d61f5b;
+  --gold: #a86a00;
+  --ring: #b0179a;
+  --neon-a: #e535c4;
+  --neon-b: #12b8d6;
+  --neon-c: #7a5cff;
+  --glass: color-mix(in srgb, var(--card) 88%, transparent);
+  --glow: 0 10px 40px -18px color-mix(in srgb, var(--neon-a) 45%, transparent);
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0e1117;
-    --foreground: #e7eaf0;
-    --card: #171b24;
-    --muted: #1f2430;
-    --muted-foreground: #9099aa;
-    --border: #272d3a;
-    --input: #323949;
-    --primary: #5b8cff;
-    --primary-foreground: #0b0f17;
-    --accent: #222a3b;
-    --good: #4cc38a;
-    --bad: #ff7b72;
-    --gold: #e3b341;
-    --ring: #5b8cff;
+    --background: #0e0818;
+    --foreground: #f3ecff;
+    --card: #170f26;
+    --muted: #21173a;
+    --muted-foreground: #a99bc4;
+    --border: #33264f;
+    --input: #3e2e60;
+    --primary: #3be8ff;
+    --primary-foreground: #0e0818;
+    --accent: #2a1d47;
+    --good: #45e3c0;
+    --good-foreground: #0e0818;
+    --bad: #ff5c8a;
+    --gold: #ffc857;
+    --ring: #ff4fd8;
+    --neon-a: #ff4fd8;
+    --neon-b: #3be8ff;
+    --neon-c: #7a5cff;
+    --glass: color-mix(in srgb, var(--card) 72%, transparent);
+    --glow: 0 0 40px -12px color-mix(in srgb, var(--neon-a) 35%, transparent);
   }
 }
 
@@ -48,10 +61,23 @@
   --color-primary-foreground: var(--primary-foreground);
   --color-accent: var(--accent);
   --color-good: var(--good);
+  --color-good-foreground: var(--good-foreground);
   --color-bad: var(--bad);
   --color-gold: var(--gold);
   --color-ring: var(--ring);
-  --font-sans: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  --color-neon-a: var(--neon-a);
+  --color-neon-b: var(--neon-b);
+  --color-neon-c: var(--neon-c);
+  --font-sans: var(--font-display), system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+/* Neon kit: Card and the default Button are built from these, so new pages get the look by using them. */
+@utility glass { background: var(--glass); backdrop-filter: blur(14px); }
+@utility neon-ring { box-shadow: 0 0 0 1px color-mix(in srgb, var(--neon-a) 28%, transparent), var(--glow); }
+@utility bg-neon { background-image: linear-gradient(120deg, var(--neon-a), var(--neon-c) 55%, var(--neon-b)); }
+@utility text-neon {
+  background-image: linear-gradient(120deg, var(--neon-a), var(--neon-b));
+  background-clip: text; -webkit-background-clip: text; color: transparent;
 }
 
 @layer base {
@@ -59,7 +85,15 @@
      In rem, so the browser's font-size setting and zoom still apply on top. */
   html { font-size: clamp(0.9375rem, 0.75rem + 0.25vw, 1.125rem); }
   * { border-color: var(--border); }
-  body { background: var(--background); color: var(--foreground); font-family: var(--font-sans); }
+  body {
+    color: var(--foreground); font-family: var(--font-sans);
+    background:
+      radial-gradient(40rem 26rem at 12% -6%, color-mix(in srgb, var(--neon-a) 18%, transparent), transparent 70%),
+      radial-gradient(40rem 30rem at 95% 8%, color-mix(in srgb, var(--neon-b) 12%, transparent), transparent 70%),
+      var(--background);
+    background-attachment: fixed;
+  }
+  h1 { font-style: italic; font-weight: 900; letter-spacing: -0.02em; }
   a { color: var(--primary); }
 }
 
@@ -70,13 +104,14 @@
 
 /* Keep the card as the visual focus, with a quiet stage behind the deck. */
 .swipe-stage {
-  background: radial-gradient(ellipse at 50% 35%, color-mix(in srgb, var(--primary) 9%, transparent), transparent 72%);
+  background: radial-gradient(ellipse at 50% 35%, color-mix(in srgb, var(--neon-c) 12%, transparent), transparent 72%);
   overflow: clip;
 }
 .swipe-profile {
-  box-shadow: 0 16px 48px -24px color-mix(in srgb, var(--foreground) 28%, transparent);
+  border-color: color-mix(in srgb, var(--neon-a) 40%, transparent);
+  box-shadow: 0 0 60px -14px color-mix(in srgb, var(--neon-a) 45%, transparent), 0 0 120px -40px color-mix(in srgb, var(--neon-b) 45%, transparent);
 }
 .swipe-profile-header {
-  background: linear-gradient(125deg, color-mix(in srgb, var(--primary) 12%, var(--card)), var(--card));
+  background: linear-gradient(130deg, color-mix(in srgb, var(--neon-a) 20%, var(--card)), color-mix(in srgb, var(--neon-c) 12%, var(--card)) 50%, color-mix(in srgb, var(--neon-b) 10%, var(--card)));
   border-bottom: 1px solid var(--border);
 }
