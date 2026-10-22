@@ -6,7 +6,11 @@ import { LangProvider } from "@/components/LangProvider";
 import { isAdmin } from "@/lib/deckServer";
 import { getT } from "@/lib/lang";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { Space_Grotesk } from "next/font/google";
 import "./globals.css";
+
+// Latin and digits only; Chinese falls back to the system font (PingFang / Microsoft YaHei)
+const display = Space_Grotesk({ subsets: ["latin"], weight: ["400", "500", "700"], variable: "--font-display" });
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getT();
@@ -21,7 +25,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const user = (await auth())?.user;
   const t = await getT();
   return (
-    <html lang={t.lang === "en" ? "en" : "zh-CN"}>
+    <html lang={t.lang === "en" ? "en" : "zh-CN"} className={display.variable}>
       <body className="min-h-screen antialiased">
         <LangProvider lang={t.lang}>
         <TooltipProvider delayDuration={150}>

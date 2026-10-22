@@ -1,5 +1,7 @@
 "use client";
+import { useEffect, useState } from "react";
 import { Info } from "lucide-react";
+import { animate, useReducedMotion } from "motion/react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useT } from "@/components/LangProvider";
 import type { T } from "@/lib/i18n";
@@ -22,12 +24,28 @@ export default function ScoreBadge({ score, size = "lg" }: { score: number | nul
   if (score == null) {
     return <span className="text-sm text-muted-foreground" data-testid="score">{t("评分校准中")}</span>;
   }
+  const lg = size === "lg";
   return (
     <span className="inline-flex items-baseline gap-1" data-testid="score">
-      <span className={cn("font-bold tabular-nums", scoreTone(score), size === "lg" ? "text-6xl leading-none" : "text-2xl")}>{score}</span>
+      {/* the big score is the page's one neon moment: gradient when good, and it counts up when it appears */}
+      <span className={cn("font-bold tabular-nums", lg && score >= 50 ? "text-neon drop-shadow-[0_0_22px_color-mix(in_srgb,var(--neon-a)_55%,transparent)]" : scoreTone(score),
+        lg ? "text-6xl leading-none tracking-tight sm:text-7xl" : "text-2xl")} aria-label={String(score)}>
+        {lg ? <CountUp to={score} /> : score}
+      </span>
       {t.lang === "zh" && <span className="text-sm text-muted-foreground">分</span>}
     </span>
   );
+}
+
+function CountUp({ to }: { to: number }) {
+  const still = useReducedMotion();
+  const [shown, setShown] = useState(still ? to : 0);
+  useEffect(() => {
+    if (still) { setShown(to); return; }
+    const run = animate(0, to, { duration: 0.9, ease: [0.16, 1, 0.3, 1], onUpdate: (v) => setShown(Math.round(v)) });
+    return () => run.stop();
+  }, [to, still]);
+  return <>{shown}</>;
 }
 
 export function ScoreHelp() {

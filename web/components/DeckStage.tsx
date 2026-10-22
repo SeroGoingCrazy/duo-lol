@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { ArrowLeft, ArrowRight, Heart, RotateCcw, X } from "lucide-react";
+import { motion, useReducedMotion } from "motion/react";
 import CopyButton from "@/components/CopyButton";
 import DeckSidebar from "@/components/DeckSidebar";
 import SwipeCard from "@/components/SwipeCard";
@@ -28,6 +29,7 @@ export default function DeckStage({ remaining, total, mutual, likes, info, canUn
   paused?: boolean;                                    // a dialog of the parent's is open: arrow keys do nothing
 }) {
   const t = useT();
+  const still = useReducedMotion();
   const [focus, setFocus] = useState<string | null>(null);   // a card opened from 喜欢我的人 or brought back by 撤销
   const [fling, setFling] = useState<Swipe | null>(null);
   const [matched, setMatched] = useState<DeckCard | null>(null);
@@ -92,13 +94,13 @@ export default function DeckStage({ remaining, total, mutual, likes, info, canUn
             <span className="text-xs text-muted-foreground">{t("撤销")}</span>
             </div>
             <div className="flex flex-col items-center gap-2">
-            <Button variant="outline" className="size-16 rounded-full bg-card p-0 shadow-sm hover:border-bad/40 hover:bg-bad/10 hover:text-bad" aria-label={t("跳过")} disabled={!top || !!fling} onClick={() => setFling("pass")}>
+            <Button variant="outline" className="size-16 rounded-full bg-card p-0 hover:border-bad/40 hover:bg-bad/10 hover:text-bad" aria-label={t("跳过")} disabled={!top || !!fling} onClick={() => setFling("pass")}>
               <X className="size-7!" />
             </Button>
             <span className="text-xs text-muted-foreground">{t("跳过")}</span>
             </div>
             <div className="flex flex-col items-center gap-2">
-            <Button className="size-16 rounded-full bg-good p-0 text-white shadow-lg shadow-good/20 hover:bg-good/90" aria-label={t("喜欢")} disabled={!top || !!fling} onClick={() => setFling("like")}>
+            <Button className="size-16 rounded-full bg-good bg-none p-0 text-good-foreground shadow-[0_0_28px_-4px_var(--good)] hover:bg-good/90" aria-label={t("喜欢")} disabled={!top || !!fling} onClick={() => setFling("like")}>
               <Heart className="size-7!" />
             </Button>
             <span className="text-xs text-muted-foreground">{t("喜欢")}</span>
@@ -113,8 +115,10 @@ export default function DeckStage({ remaining, total, mutual, likes, info, canUn
 
       {matched && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-labelledby="match-title" data-testid="match-dialog">
-          <Card className="w-full max-w-sm space-y-4 text-center">
-            <h2 id="match-title" className="text-2xl font-bold text-good">{t("互选成功")}</h2>
+          <motion.div className="w-full max-w-sm" initial={still ? false : { opacity: 0, scale: 0.85 }} animate={{ opacity: 1, scale: 1 }}
+            transition={{ type: "spring", stiffness: 320, damping: 22 }}>
+          <Card className="space-y-4 text-center shadow-[0_0_80px_-10px_var(--neon-a)]">
+            <h2 id="match-title" className="text-neon text-3xl font-black italic">{t("互选成功")}</h2>
             <p className="text-sm text-muted-foreground">{t("你们互相喜欢了。在游戏客户端里加对方好友，一起排位吧。")}</p>
             <div className="space-y-1">
               <div className="text-lg font-semibold" data-testid="match-riot-id">{matched.riot_id}</div>
@@ -126,6 +130,7 @@ export default function DeckStage({ remaining, total, mutual, likes, info, canUn
               <Button autoFocus onClick={() => setMatched(null)}>{t("继续滑")}</Button>
             </div>
           </Card>
+          </motion.div>
         </div>
       )}
     </>
