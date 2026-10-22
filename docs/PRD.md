@@ -55,7 +55,7 @@
 
 - 中文界面，位置和段位用中文，英雄用 Data Dragon 的中文名（下面附英文名），之后加英文切换。
 - 组件用 Tailwind + Radix（shadcn/ui 写法），放在 `web/components/ui/`。
-- 搭配评分的分布由 `data/score_scale.py` 从推荐池拟合；API 启动时没有 `data/score_scale.json` 会在后台自动拟合。
+- 搭配评分的分布由 `data/score_scale.py` 从推荐池拟合；结果存在数据库里，API 启动时没有会在后台自动拟合。
 
 ## 7. 上线前要做的事（原型不做）
 

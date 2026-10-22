@@ -5,8 +5,8 @@ WORKDIR /app
 COPY pyproject.toml uv.lock .python-version ./
 RUN uv sync --frozen --no-dev
 COPY data/ data/
-# The database is DATABASE_URL (Neon), set as a secret; the volume keeps the fitted score scale.
-ENV DUO_SCORE_SCALE=/data/score_scale.json PYTHONUNBUFFERED=1
+# The database is DATABASE_URL (Neon), set as a secret; it also holds the fitted score scale.
+ENV PYTHONUNBUFFERED=1
 EXPOSE 8000
 # Without the secret the API would quietly start on an empty SQLite file, so refuse to start.
 CMD ["sh", "-c", "test -n \"$DATABASE_URL\" || { echo 'set the DATABASE_URL secret (docs/deploy.md)'; exit 1; }; exec uv run --no-dev uvicorn api:app --app-dir data --host 0.0.0.0 --port 8000"]

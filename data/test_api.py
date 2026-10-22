@@ -253,10 +253,57 @@ def test_score_compares_only_same_positions():
         assert not score_scale.compared_with(scale, roles)[1]
 
 
-def test_old_scale_without_positions_is_refitted(tmp_path):
-    path = tmp_path / "score_scale.json"
-    path.write_text('{"mean": 0.5, "std": 0.01, "pairs": 300}')
-    assert score_scale.load_scale(str(path)) is None
+def test_scale_is_saved_in_the_database(client):
+    with db.connect(DB) as conn:
+        scale = score_scale.fit(conn)
+        score_scale.save_scale(conn, scale)
+        score_scale.save_scale(conn, {**scale, "fitted_at": scale["fitted_at"] + 1})   # replaces, one row
+        assert score_scale.load_scale(conn) == {**scale, "fitted_at": scale["fitted_at"] + 1}
+        assert conn.execute("SELECT count(*) FROM score_scale").fetchone()[0] == 1
+
+
+def test_api_adopts_newer_scale_and_refits_stale_one(client, monkeypatch):
+    with db.connect(DB) as conn:
+        fitted = score_scale.fit(conn)
+        score_scale.save_scale(conn, fitted)
+    monkeypatch.setattr(api, "scale", None)
+    monkeypatch.setattr(api, "last_fit_try", 0)
+    fits = []
+    real_fit = score_scale.fit
+    monkeypatch.setattr(score_scale, "fit", lambda *a: fits.append(1) or {**real_fit(*a), "fitted_at": 2 * 10**9})
+
+    api.refresh_scale(fitted["fitted_at"] + 60)   # fresh in the database: adopted, no fit
+    assert api.scale == fitted and not fits
+    api.refresh_scale(fitted["fitted_at"] + api.SCALE_REFIT_SECONDS)   # a day old: refitted and saved
+    assert fits and api.scale["fitted_at"] == 2 * 10**9
+    with db.connect(DB) as conn:
+        assert score_scale.load_scale(conn)["fitted_at"] == 2 * 10**9
+
+
+def test_failed_fit_waits_a_day_and_unsaved_fit_still_serves(client, monkeypatch):
+    with db.connect(DB) as conn:
+        conn.execute("DELETE FROM score_scale"); conn.commit()
+    monkeypatch.setattr(api, "scale", None)
+    monkeypatch.setattr(api, "last_fit_try", 0)
+    monkeypatch.setattr(score_scale, "fit", lambda *a: None)
+    api.refresh_scale(10**9)
+    monkeypatch.setattr(score_scale, "fit", lambda *a: pytest.fail("refit within a day of a failed fit"))
+    api.refresh_scale(10**9 + 3600)
+
+    def read_only(*a):
+        raise OSError("read-only database")
+    monkeypatch.setattr(score_scale, "fit", lambda *a: {"mean": 0.5, "std": 0.01, "fitted_at": 1, "by_roles": {}})
+    monkeypatch.setattr(score_scale, "save_scale", read_only)
+    with pytest.raises(OSError):
+        api.refresh_scale(10**9 + api.SCALE_REFIT_SECONDS)
+    assert api.scale and api.scale["mean"] == 0.5
+
+
+def test_old_scale_without_positions_is_refitted():
+    with db.connect(DB) as conn:
+        score_scale.save_scale(conn, {"mean": 0.5, "std": 0.01, "pairs": 300, "fitted_at": 1})
+        assert score_scale.load_scale(conn) is None
+    assert score_scale.usable([]) is None and score_scale.usable({"std": "x", "by_roles": {}}) is None
 
 
 @pytest.mark.parametrize("a, b, ok", [

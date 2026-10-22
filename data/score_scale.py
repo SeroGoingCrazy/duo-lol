@@ -1,6 +1,8 @@
 """搭配评分 (0-100): where a 预测胜率 falls among the 预测胜率 of real 组合.
 
-    uv run python data/score_scale.py --db lol_duo.sqlite --out data/score_scale.json
+    uv run python data/score_scale.py --db lol_duo.sqlite
+
+The fit is saved in the database (score_scale table), so the API, on any machine, picks it up.
 
 预测胜率 cluster tightly around 50%, so 50.4% vs 50.0% is easy to misread as "nothing".
 The score is the percentile of a 预测胜率 under a normal distribution fitted to the 预测胜率
@@ -39,15 +41,27 @@ def roles_key(roles):
     return "+".join(sorted((roles["a"], roles["b"])))
 
 
-def load_scale(path):
-    """{"mean", "std", ...} written by this script; None if missing or unusable."""
+def usable(scale):
+    """The scale, or None if it cannot score. One from before ADR-0010 has no per-position-pair fit:
+    treat it as missing so it is refitted."""
+    ok = isinstance(scale, dict) and isinstance(scale.get("std"), (int, float)) and scale["std"] > 0
+    return scale if ok and "by_roles" in scale and "fitted_at" in scale else None
+
+
+def load_scale(conn):
+    """{"mean", "std", ...} last saved with save_scale; None if there is none or it is unusable."""
+    row = conn.execute("SELECT scale FROM score_scale WHERE id=1").fetchone()
     try:
-        with open(path) as f:
-            scale = json.load(f)
-    except (FileNotFoundError, ValueError):
+        return usable(json.loads(row[0])) if row else None
+    except ValueError:
         return None
-    # A scale from before ADR-0010 has no per-position-pair fit: treat it as missing so it is refitted.
-    return scale if scale.get("std", 0) > 0 and "by_roles" in scale else None
+
+
+def save_scale(conn, scale):
+    with conn:
+        conn.execute("""INSERT INTO score_scale (id, scale, fitted_at) VALUES (1, ?, ?)
+                        ON CONFLICT(id) DO UPDATE SET scale=excluded.scale, fitted_at=excluded.fitted_at""",
+                     (json.dumps(scale), scale["fitted_at"]))
 
 
 def compared_with(scale, roles):
@@ -100,13 +114,16 @@ def fit(conn, gap_table=None, sample_pairs=SAMPLE_PAIRS, seed=0, max_pairs=MAX_S
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--db", default=db.default_target(), help="SQLite path or Postgres URL (default: DUO_DB, DATABASE_URL)")
-    ap.add_argument("--out", default="data/score_scale.json")
+    ap.add_argument("--out", help="also write the scale to this JSON file")
     ap.add_argument("--gap-table", default="data/rank_gap.json")
     ap.add_argument("--pairs", type=int, default=SAMPLE_PAIRS, help="sampled 组合 wanted per position pair")
     args = ap.parse_args()
-    scale = fit(db.connect(args.db), predict.load_gap_table(args.gap_table), args.pairs)
+    conn = db.connect(args.db)
+    scale = fit(conn, predict.load_gap_table(args.gap_table), args.pairs)
     if not scale:
         raise SystemExit("not enough duo-eligible players in the 推荐池 to fit the score")
+    save_scale(conn, scale)
     print(json.dumps(scale, indent=2))
-    with open(args.out, "w") as f:
-        json.dump(scale, f, indent=2)
+    if args.out:
+        with open(args.out, "w") as f:
+            json.dump(scale, f, indent=2)
