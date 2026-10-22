@@ -29,7 +29,7 @@ export default function ScoreBadge({ score, size = "lg" }: { score: number | nul
     <span className="inline-flex items-baseline gap-1" data-testid="score">
       {/* the big score is the page's one neon moment: gradient when good, and it counts up when it appears */}
       <span className={cn("font-bold tabular-nums", lg && score >= 50 ? "text-neon drop-shadow-[0_0_22px_color-mix(in_srgb,var(--neon-a)_55%,transparent)]" : scoreTone(score),
-        lg ? "text-7xl leading-none tracking-tight" : "text-2xl")} aria-label={String(score)}>
+        lg ? "text-6xl leading-none tracking-tight sm:text-7xl" : "text-2xl")} aria-label={String(score)}>
         {lg ? <CountUp to={score} /> : score}
       </span>
       {t.lang === "zh" && <span className="text-sm text-muted-foreground">分</span>}
