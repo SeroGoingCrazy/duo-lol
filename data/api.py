@@ -55,7 +55,8 @@ async def require_internal_secret(request: Request, call_next):
             request.headers.get("x-duo-internal", "").encode(), INTERNAL_SECRET.encode()):
         return JSONResponse({"detail": "forbidden"}, status_code=403)
     return await call_next(request)
-scale = None   # loaded from the database at startup
+scale = None   # loaded from the database at startup (refresh_scale)
+last_fit_try = 0
 jobs = {}
 jobs_lock = threading.Lock()
 _client = None
@@ -81,39 +82,38 @@ def riot_client():
         return _client
 
 
+def refresh_scale(now):
+    """Adopt a newer scale saved in the database (by score_scale.py or another machine); fit one when
+    there is none or it is SCALE_REFIT_SECONDS old. A failed fit waits as long before the next try."""
+    global scale, last_fit_try
+    with connect() as conn:
+        stored = score_scale.load_scale(conn)
+        if stored and stored["fitted_at"] > (scale or {}).get("fitted_at", 0):
+            scale = stored
+        newest = max((scale or {}).get("fitted_at", 0), last_fit_try)
+        if now - newest < SCALE_REFIT_SECONDS:
+            return
+        last_fit_try = now
+        fitted = score_scale.fit(conn, GAP_TABLE)
+        if fitted:
+            scale = fitted   # serves even if the save below fails (a read-only database)
+            score_scale.save_scale(conn, fitted)
+
+
 @app.on_event("startup")
 def keep_score_scale_fresh():
-    """Load the saved scale from the database; without one, fit it in the background (scores are None
-    until then). The collector adds data every day, so a scale older than SCALE_REFIT_SECONDS is refitted
-    while the old one keeps serving, and one saved by score_scale.py or another machine is picked up."""
-
-    def check():
-        global scale
-        with connect() as conn:
-            stored = score_scale.load_scale(conn)
-            if stored and stored["fitted_at"] > (scale or {}).get("fitted_at", 0):
-                scale = stored
-            if scale and time.time() - scale["fitted_at"] < SCALE_REFIT_SECONDS:
-                return
-            fitted = score_scale.fit(conn, GAP_TABLE)
-            if fitted:
-                score_scale.save_scale(conn, fitted)
-                scale = fitted
+    """Load the saved scale, and keep it fresh, in the background so a slow database never holds up
+    startup; scores are None until the first load. The collector adds data every day, so a day-old
+    scale is refitted while the old one keeps serving."""
 
     def run():
         while True:
             try:
-                check()
+                refresh_scale(time.time())
             except Exception as e:   # e.g. the database is briefly unreachable; try again next time
                 print(f"score scale check failed: {type(e).__name__}", flush=True)
             time.sleep(SCALE_CHECK_SECONDS)
 
-    global scale
-    try:   # synchronously, so the first requests already have scores
-        with connect() as conn:
-            scale = score_scale.load_scale(conn)
-    except Exception as e:
-        print(f"score scale load failed: {type(e).__name__}", flush=True)
     threading.Thread(target=run, daemon=True).start()
 
 

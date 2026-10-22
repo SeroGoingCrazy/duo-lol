@@ -44,7 +44,8 @@ def roles_key(roles):
 def usable(scale):
     """The scale, or None if it cannot score. One from before ADR-0010 has no per-position-pair fit:
     treat it as missing so it is refitted."""
-    return scale if scale and scale.get("std", 0) > 0 and "by_roles" in scale else None
+    ok = isinstance(scale, dict) and isinstance(scale.get("std"), (int, float)) and scale["std"] > 0
+    return scale if ok and "by_roles" in scale and "fitted_at" in scale else None
 
 
 def load_scale(conn):

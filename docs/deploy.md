@@ -12,7 +12,7 @@ fly deploy
 ```
 
 - `DATABASE_URL` 是 Neon 的连接串（和网站用的同一个）。Python 会自己建 `data` schema 和表；连接串里的 `-pooler` 会被换成直连地址，因为连接池会丢掉 schema 设置。
-- 不需要磁盘卷。搭配评分的拟合结果存在数据库的 `score_scale` 表里，数据库里没有时 API 在后台拟合，之后每天重拟一次；本地跑 `uv run python data/score_scale.py` 也会写进同一张表，线上一小时内会换成新的。以前建过 `duo_data` 卷的话，可以用 `fly volumes destroy` 删掉。
+- 不需要磁盘卷。搭配评分的拟合结果存在数据库的 `score_scale` 表里，数据库里没有时 API 在后台拟合，之后每天重拟一次；本地跑 `uv run python data/score_scale.py` 也会写进同一张表，线上一小时内会换成新的。以前建过 `duo_data` 卷的话，先 `fly deploy` 这一版（机器不再挂卷），再用 `fly volumes list` 找到卷的 id、`fly volumes destroy <id>` 删掉。
 - **`DUO_INTERNAL_SECRET` 必须设。** 设了以后，Python API 只接受带这个密钥的请求，浏览器只能通过网站允许的几个接口（`web/app/api/[...path]`）访问它，Riot 头像查询和会员牌堆接口不会被直接调用。
 - 开发者 Key 每 24 小时过期，过期后 `fly secrets set RIOT_API_KEY=...` 换新的（会自动重启）。正式上线前要申请 Personal 或 Production Key。
 
