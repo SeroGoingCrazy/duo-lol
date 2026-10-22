@@ -8,20 +8,12 @@ export default async function SiteFooter() {
   const link = "text-muted-foreground no-underline transition-colors hover:text-foreground";
   return (
     <footer className="glass mt-auto border-t border-border/60" data-testid="footer">
-      <div className="mx-auto grid w-full max-w-[96rem] gap-8 px-4 py-10 text-sm sm:px-6 md:grid-cols-[2fr_1fr_1fr] lg:px-10">
+      <div className="mx-auto grid w-full max-w-[96rem] gap-8 px-4 py-10 text-sm sm:px-6 md:grid-cols-[3fr_1fr] lg:px-10">
         <div className="space-y-2">
           <p className="text-base font-bold tracking-tight"><span className="text-neon">{t("匹配搭子")}</span></p>
           <p className="max-w-md text-muted-foreground">{t("预测两名美服玩家一起打单双排的胜率，并推荐搭子")}</p>
           <p className="max-w-md text-xs text-muted-foreground">{t("搭配评分只衡量两个人搭配得合不合适，不是个人实力或隐藏分评分。")}</p>
         </div>
-        <nav aria-label={t("网站")} className="space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/80">{t("网站")}</p>
-          <ul className="space-y-1.5">
-            <li><Link href="/" className={link}>{t("查组合")}</Link></li>
-            <li><Link href="/find" className={link}>{t("找搭子")}</Link></li>
-            <li><Link href="/account" className={link}>{t("我的账号")}</Link></li>
-          </ul>
-        </nav>
         <nav aria-label={t("条款")} className="space-y-2">
           <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/80">{t("条款")}</p>
           <ul className="space-y-1.5">

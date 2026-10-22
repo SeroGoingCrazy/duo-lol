@@ -16,8 +16,8 @@ export async function generateMetadata(): Promise<Metadata> {
 
 // Arcane's cast, from the vendored champion portraits
 const CAST = ["Jinx", "Vi", "Ekko", "Caitlyn", "Jayce", "Viktor", "Mel"];
-// the Arcane palette's two neons, also defined as --neon-a / --neon-b in the site theme
-const GLOW = "radial-gradient(40rem 24rem at 10% 20%, rgb(255 79 216 / 0.18), transparent 70%), radial-gradient(36rem 22rem at 90% 80%, rgb(59 232 255 / 0.16), transparent 70%)";
+// a stronger pool of the Arcane neons behind the hero than the site background has
+const GLOW = "radial-gradient(40rem 24rem at 10% 20%, color-mix(in srgb, var(--neon-a) 16%, transparent), transparent 70%), radial-gradient(36rem 22rem at 90% 80%, color-mix(in srgb, var(--neon-b) 14%, transparent), transparent 70%)";
 
 function DiscordLogo() {
   return (
@@ -39,14 +39,14 @@ export default async function LoginPage() {
   const steps = [t("用 Discord 登录"), t("输入你的 Riot ID 绑定账号"), t("打开「同意被推荐」，开始找搭子")];
 
   return (
-    <div className="relative isolate -mx-4 overflow-hidden rounded-3xl px-4 py-10 sm:-mx-6 sm:px-6 lg:-mx-10 lg:px-10 lg:py-16">
-      <div aria-hidden="true" className="absolute inset-0 -z-10" style={{ background: GLOW }} />
+    <div className="relative isolate py-6 lg:py-14">
+      <div aria-hidden="true" className="pointer-events-none absolute -inset-x-40 -inset-y-20 -z-10" style={{ background: GLOW }} />
       <div className="mx-auto grid max-w-6xl items-center gap-10 lg:grid-cols-[1.15fr_1fr] lg:gap-16">
         <section>
           <p className="mb-4 inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium text-muted-foreground">
             <span className="size-1.5 rounded-full bg-good" />{t("美服单双排 · 免费")}
           </p>
-          <h1 className="text-4xl font-bold leading-tight tracking-tight lg:text-5xl">
+          <h1 className="text-4xl leading-tight tracking-tight text-balance lg:text-5xl">
             {t("找一个")}<span className="text-neon">{t("真正合得来")}</span>{t("的双排搭子")}
           </h1>
           <p className="mt-4 max-w-xl text-muted-foreground">

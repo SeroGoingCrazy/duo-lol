@@ -98,7 +98,7 @@ Next.js（web/，部署在 Vercel）
   │  内部 HTTPS + 服务间密钥
   ▼
 Python API（data/，部署在 Fly.io 或 Railway，美东）
-  · 预测、查组合、玩家资料、头像验证
+  · 预测、查组合、玩家资料、查 Riot 账号（绑定）
   · 只写 data 库
   │
   ├── 作业 worker（同一份代码，单进程）
@@ -130,13 +130,12 @@ Postgres（Neon，美东）
 
 | 表 | 内容 |
 |---|---|
-| `members` | 会员；`puuid`（唯一）、`verified_at`、`last_active_at`、`deleted_at` |
+| `members` | 会员；`puuid`（唯一）、`bound_at`、`verified_at`（RSO 验证后才有，ADR-0011）、`avatar_icon_id`、`last_active_at`、`deleted_at` |
 | `auth_accounts`、`auth_sessions` | Auth.js 标准表（Discord 账号、会话） |
 | `member_prefs` | 想打的位置、`recommend_opt_in`、`show_discord`、自选英雄；简介、语言、开麦、常玩时间、现在想打（`looking_until`）、自己的牌堆筛选 |
 | `swipes` | `from_member`、`to_member`、`action`（like/pass）、`created_at`；每对唯一 |
 | `mutual_likes` | 互选：两人、`created_at`、`cancelled_at` |
 | `blocks`、`reports` | 拉黑、举报（理由、处理状态） |
-| `verification_challenges` | 头像验证：指定头像、过期时间 |
 
 **data（Python 写，SQL 迁移放 `data/migrations/`）**
 
@@ -153,13 +152,13 @@ Postgres（Neon，美东）
 
 - 每个会员每天最多 100 次喜欢，跳过不限。这是防刷上限，不影响排序，可以调整。
 - 被 3 名不同会员举报的账号自动暂停推荐，等人工处理。
-- 绑定必须过头像验证，防止冒用别人的 Riot ID。
+- 拿到 RSO 前绑定不验证、标「未验证」；号主可以找管理员解除被冒绑的 Riot ID（ADR-0011）。
 - 所有写接口按会员限频。
 
 ## 9. 合规与隐私（上线前必须完成）
 
 - 申请 Riot Production Key；上线前核对 Riot 开发者政策对"组队/找搭子"类产品的要求。
-- 拿到正式 Key 后申请 Riot Sign On（RSO），用它替换头像验证（ADR-0005）。
+- 拿到正式 Key 后申请 Riot Sign On（RSO），用它验证绑定（ADR-0011；申请材料见 `docs/rso-application.md`）。
 - 网站页脚加"非 Riot 官方产品"声明。
 - 隐私政策：说明收集哪些数据、用途、保存多久。
 - 注销账号后 30 天内删除会员数据、滑卡和互选记录；对局数据作为全服统计的一部分保留，但不再与该会员关联。
@@ -171,7 +170,7 @@ Postgres（Neon，美东）
 |---|---|---|
 | M0 | 原型：查组合、找搭子演示站（进行中） | 数据抓取 |
 | M1 | 后端改造：Postgres、迁移、作业队列与 worker、全服统计汇总、预测缓存 | M0 |
-| M2 | 登录与绑定：Discord 登录、头像验证、偏好设置、注销 | M1 |
+| M2 | 登录与绑定：Discord 登录、输入 Riot ID 绑定、头像、偏好设置、注销 | M1 |
 | M3 | 滑卡：牌堆、喜欢/跳过/撤销、互选、拉黑举报、每日上限；管理员处理举报（驳回、封号、恢复） | M2 |
 | M4 | 上线准备：Production Key、RSO、停用 OP.GG、隐私政策、监控告警、Playwright 全流程测试 | M3 |
 
@@ -181,7 +180,7 @@ Postgres（Neon，美东）
 
 在原型 §5 三条之外：
 
-1. **绑定**：新会员从登录到绑定完成不超过 3 步页面操作；头像不一致时给出明确提示。
+1. **绑定**：新会员从登录到绑定完成不超过 3 步页面操作；Riot ID 查不到或已被绑定时给出明确提示。
 2. **发牌**：已有预测缓存时，打开滑卡页 1 秒内出第一张卡；牌堆顺序与预测胜率一致。
 3. **互选**：双方喜欢后，两人刷新页面都能在"我的互选"看到对方 Riot ID；互选前任何接口都拿不到对方 Riot ID。
 4. **退出**：关闭"同意被推荐"后，此人不再出现在任何人的新牌堆里。
@@ -190,7 +189,7 @@ Postgres（Neon，美东）
 
 ## 12. 待定（我先按默认做，可以改）
 
-- **登录方式**：Discord 登录 + 头像验证，拿到 RSO 后换成 RSO（默认，ADR-0005）。
+- **登录方式**：Discord 登录 + 输入 Riot ID 绑定（未验证），拿到 RSO 后用 RSO 验证（ADR-0011）。
 - **互选后展示什么**：Riot ID 必展示，Discord 名由本人决定（默认）。
 - **牌堆是否混入"探索"卡**（预测胜率不是最高、但能帮模型学习的人）：首发不混，严格按胜率排（默认）。
 - **被跳过的人多久后重新出现**：不再出现，除非对方的位置或段位变了（默认）。

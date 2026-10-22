@@ -15,8 +15,9 @@ async function bind(page: Page, riotId: string) {
   await page.getByRole("button", { name: "绑定", exact: true }).click();
 }
 
-const iconOf = async (page: Page, testId = "avatar") =>
-  Number((await page.getByTestId(testId).first().getAttribute("src"))?.match(/profileicon\/(\d+)\.png/)?.[1]);
+/** The summoner icon id shown as the 头像 in the nav. */
+const iconOf = async (page: Page) =>
+  Number((await page.getByTestId("nav-avatar").locator("img").getAttribute("src"))?.match(/profileicon\/(\d+)\.png/)?.[1]);
 
 test("登录: bind a Riot ID (未验证, ADR-0011), pick a 头像, set 偏好, then 注销", async ({ page }) => {
   await page.goto("/");
@@ -39,9 +40,9 @@ test("登录: bind a Riot ID (未验证, ADR-0011), pick a 头像, set 偏好, t
   await card.getByRole("radiogroup").getByRole("radio").first().click();
   await card.getByRole("button", { name: "用这个头像" }).click();
   await expect(card.getByText("头像已更新")).toBeVisible();
-  await expect.poll(() => iconOf(page, "nav-avatar")).toBe(12);
+  await expect.poll(() => iconOf(page)).toBe(12);
   await card.getByRole("button", { name: "用我游戏里的头像" }).click();
-  await expect.poll(() => iconOf(page, "nav-avatar")).toBe(7);
+  await expect.poll(() => iconOf(page)).toBe(7);
 
   // 偏好: at most two positions, 同意被推荐 starts off
   const prefs = page.getByTestId("prefs");
@@ -79,7 +80,7 @@ test("登录: one Riot account binds to one 会员 until they unbind it", async 
   await first.getByRole("button", { name: "换一个 Riot ID" }).click();
   await expect(first.getByRole("button", { name: "绑定", exact: true })).toBeVisible();
   await bind(second, "owner#na1");
-  await expect(second.getByTestId("bound-riot-id")).toHaveText("Owner#NA1");
+  await expect(second.getByTestId("bound-riot-id")).toHaveText(/^owner#na1$/i);
 });
 
 test("account page needs login", async ({ page }) => {

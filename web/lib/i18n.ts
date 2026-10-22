@@ -242,7 +242,6 @@ const EN = new Map<string, string>(Object.entries({
   "Riot 头像": "Riot icons",
   "再显示 {n} 个（共 {total} 个）": "Show {n} more ({total} in all)",
   "用这个头像": "Use this icon",
-  "网站": "Site",
   "条款": "Legal",
   "保留所有权利": "All rights reserved",
   "绑定 Riot 账号": "Link your Riot account",

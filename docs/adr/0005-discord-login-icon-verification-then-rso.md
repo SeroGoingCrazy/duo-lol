@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: superseded in part by ADR-0011 (头像验证)
 ---
 
 # 先用 Discord 登录加头像验证绑定 Riot 账号，拿到 RSO 后替换
