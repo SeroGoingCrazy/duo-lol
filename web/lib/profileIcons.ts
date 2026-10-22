@@ -12,8 +12,10 @@ function iconList() {
   return list;
 }
 
-export async function profileIconIds() {
-  return new Set((await iconList()).icons.map(([id]) => id));
+let ids: Promise<Set<number>> | undefined;
+export function profileIconIds() {
+  ids ??= iconList().then((l) => new Set(l.icons.map(([id]) => id)));
+  return ids;
 }
 
 /** Turns summoner icon ids into 头像 images; null when there is none to show. */

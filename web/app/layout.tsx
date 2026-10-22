@@ -25,6 +25,7 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const user = (await auth())?.user;
   const t = await getT();
+  const [admin, avatar] = user ? await Promise.all([isAdmin(user.id), memberAvatar(user.id)]) : [false, null];
   return (
     <html lang={t.lang === "en" ? "en" : "zh-CN"} className={display.variable}>
       <body className="min-h-screen antialiased">
@@ -32,7 +33,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <TooltipProvider delayDuration={150}>
           <div className="flex min-h-screen flex-col overflow-x-clip">
             <main className="mx-auto w-full max-w-[96rem] flex-1 px-4 pb-16 pt-6 sm:px-6 lg:px-10 lg:pt-8">
-              <Nav member={user ? { name: user.name ?? "", admin: await isAdmin(user.id), avatar: await memberAvatar(user.id) } : null} />
+              <Nav member={user ? { name: user.name ?? "", admin, avatar } : null} />
               {children}
             </main>
             <SiteFooter />

@@ -144,22 +144,18 @@ export async function deck() {
   }
   cards.sort((a, b) => b.win_rate - a.win_rate);
   // a 互选 stays listed even if the pair can no longer be scored (say, one of them climbed out of duo range)
+  const avatar = await avatarUrls();
   const mutualCards: DeckCard[] = mutualRows
     .filter((r) => !hidden.has(r.members.id))
     .map((r) => {
       const p = scoredMutual.get(r.members.id);
       const profile = profileOf(r.member_prefs, now);
       return { ...(p ? card(r.members.id, p, profile) : unscored(r.members.id, profile)), riot_id: r.members.riotId!,
-        discord: r.member_prefs.showDiscord ? r.members.name : null };
+        discord: r.member_prefs.showDiscord ? r.members.name : null,
+        avatar: avatar(r.members.avatarIconId), riot_verified: !!r.members.verifiedAt };
     })
     .sort((a, b) => +mutual.get(b.id)! - +mutual.get(a.id)!);
   for (const c of mutualCards) c.duo_record = records.get(c.id) ?? null;
-  const avatar = await avatarUrls();
-  for (const c of mutualCards) {
-    const m = mutualRows.find((r) => r.members.id === c.id)!.members;
-    c.avatar = avatar(m.avatarIconId);
-    c.riot_verified = !!m.verifiedAt;
-  }
   const lastPass = await latestPass(db, me.id);
   return {
     cards, likes_you: cards.filter((c) => likers.has(c.id)).map((c) => c.id), mutual: mutualCards,
@@ -358,6 +354,15 @@ export async function pause(db: Db, target: Member) {
 export async function unpause(db: Db, target: Member) {
   await db.update(members).set({ suspendedAt: null }).where(eq(members.id, target.id));
   if (target.puuid) await db.delete(riotBans).where(eq(riotBans.puuid, target.puuid));
+}
+
+/** 解绑: the 会员 keeps their membership, 偏好 and any pause, but loses the Riot account, its 头像 and their 互选,
+ *  so nobody keeps a Riot ID that is no longer theirs to contact (ADR-0011). */
+export async function releaseRiotAccount(db: Db, memberId: string) {
+  await db.update(mutualLikes).set({ cancelledAt: new Date() })
+    .where(and(isNull(mutualLikes.cancelledAt), or(eq(mutualLikes.memberA, memberId), eq(mutualLikes.memberB, memberId))));
+  await db.update(members).set({ puuid: null, riotId: null, boundAt: null, verifiedAt: null, avatarIconId: null })
+    .where(eq(members.id, memberId));
 }
 
 /** Is this Riot account paused from an earlier membership? Checked when it is bound again. By puuid only:

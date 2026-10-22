@@ -16,7 +16,8 @@ export async function generateMetadata(): Promise<Metadata> {
 export const dynamic = "force-dynamic";
 
 /** Report queue (PRD-v2 §8, M3), for the site's own admins, so its body stays in Chinese: open reports grouped by the reported 会员, plus everyone paused. */
-export default async function AdminPage() {
+export default async function AdminPage({ searchParams }: { searchParams: Promise<{ unbound?: string }> }) {
+  const { unbound } = await searchParams;
   if (!(await isAdmin((await auth())?.user?.id))) notFound();
   const db = await getDb();
   const { members, reports } = schema;
@@ -78,6 +79,9 @@ export default async function AdminPage() {
             <Input name="riot_id" aria-label="要解除的 Riot ID" placeholder="Name#NA1" required autoComplete="off" className="min-w-0 flex-1" />
             <Button variant="outline">解除绑定</Button>
           </form>
+          {unbound !== undefined && (
+            <p className="mt-3 text-sm" role="status">{unbound ? `已解除 ${unbound} 的绑定，相关互选已取消。` : "没有会员绑定这个 Riot ID。"}</p>
+          )}
         </Card>
       </div>
     </>

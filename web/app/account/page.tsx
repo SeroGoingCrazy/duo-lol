@@ -6,6 +6,7 @@ import { BindRiotCard, DeleteAccountCard, PrefsCard } from "@/components/Account
 import { Avatar, AvatarCard } from "@/components/ProfileIconPicker";
 import { getDb, schema } from "@/lib/db";
 import { avatarUrl } from "@/lib/profileIcons";
+import { riotAccount } from "@/lib/riotAccount";
 import { getT } from "@/lib/lang";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -20,6 +21,14 @@ export default async function AccountPage() {
   const [member] = await db.select().from(schema.members).where(eq(schema.members.id, me));
   const [prefs] = await db.select().from(schema.memberPrefs).where(eq(schema.memberPrefs.memberId, me));
   const bound = !!member.boundAt;
+  if (bound && member.avatarIconId == null) {
+    // bound before 头像 existed (migration 0006): start from the in-game icon, as a new binding does
+    const account = await riotAccount(member.riotId!).catch(() => null);
+    if (account?.puuid === member.puuid) {
+      member.avatarIconId = account.profile_icon_id;
+      await db.update(schema.members).set({ avatarIconId: account.profile_icon_id }).where(eq(schema.members.id, me));
+    }
+  }
   const avatar = await avatarUrl(member.avatarIconId);
 
   return (

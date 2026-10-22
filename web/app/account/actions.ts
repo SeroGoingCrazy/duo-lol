@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { getDb, schema } from "@/lib/db";
-import { isBanned } from "@/lib/deckServer";
+import { isBanned, releaseRiotAccount } from "@/lib/deckServer";
 import { riotAccount, RiotAccountError, warmPlayer } from "@/lib/riotAccount";
 import { riotIdProblem } from "@/lib/api";
 import { POSITIONS } from "@/lib/labels";
@@ -48,23 +48,33 @@ export async function bindRiot(_: ActionState, form: FormData): Promise<ActionSt
   const db = await getDb();
   // a Riot account paused under an earlier membership stays paused (PRD-v2 §8)
   const banned = await isBanned(db, account.puuid);
-  await db.update(schema.members)
-    .set({ puuid: account.puuid, riotId: account.riot_id, boundAt: new Date(), verifiedAt: null,
-      avatarIconId: account.profile_icon_id, ...(banned ? { suspendedAt: new Date() } : {}) })
-    .where(eq(schema.members.id, me));
+  try {
+    await db.update(schema.members)
+      .set({ puuid: account.puuid, riotId: account.riot_id, boundAt: new Date(), verifiedAt: null,
+        avatarIconId: account.profile_icon_id, ...(banned ? { suspendedAt: new Date() } : {}) })
+      .where(eq(schema.members.id, me));
+  } catch {
+    // members.puuid is unique: someone else bound it a moment ago
+    return { error: "这个 Riot 账号已经被别的会员绑定。如果这是你的号，请在 Discord 联系网站管理员" };
+  }
   await db.insert(schema.memberPrefs).values({ memberId: me }).onConflictDoNothing();
   warmPlayer(account.riot_id);
   revalidatePath("/", "layout");
   return { ok: "绑定成功" };
 }
 
-/** 解绑: frees the Riot account, say after a typo; 偏好 stay for the next one. A paused 会员 stays paused. */
-export async function unbindRiot() {
+/** 解绑: frees the Riot account, say after a typo, and ends their 互选 (releaseRiotAccount).
+ *  Not while paused or reported, so nobody sheds a Riot account before the pause records it (PRD-v2 §8). */
+export async function unbindRiot(_: ActionState): Promise<ActionState> {
   const me = await memberId();
   const db = await getDb();
-  await db.update(schema.members).set({ puuid: null, riotId: null, boundAt: null, verifiedAt: null })
-    .where(eq(schema.members.id, me));
+  const [m] = await db.select().from(schema.members).where(eq(schema.members.id, me));
+  const [reported] = await db.select({ id: schema.reports.id }).from(schema.reports)
+    .where(and(eq(schema.reports.toMember, me), eq(schema.reports.status, "open"))).limit(1);
+  if (m.suspendedAt || reported) return { error: "你有待处理的举报，暂时不能换 Riot 账号" };
+  await releaseRiotAccount(db, me);
   revalidatePath("/", "layout");
+  return {};
 }
 
 /** 头像: any summoner icon from the list, or back to the one they wear in game right now. */
@@ -75,11 +85,15 @@ export async function setAvatar(_: ActionState, form: FormData): Promise<ActionS
   if (form.get("icon") === "game") {
     const [m] = await db.select().from(schema.members).where(eq(schema.members.id, me));
     if (!m.riotId) return { error: "先绑定 Riot 账号" };
+    let account;
     try {
-      icon = (await riotAccount(m.riotId)).profile_icon_id;
+      account = await riotAccount(m.riotId);
     } catch (e) {
       return { error: e instanceof RiotAccountError ? e.message : "查询失败，请稍后再试" };
     }
+    // a renamed Riot ID can belong to someone else now
+    if (account.puuid !== m.puuid) return { error: "这个 Riot ID 现在属于另一个账号，请重新绑定" };
+    icon = account.profile_icon_id;
   } else if (!(await profileIconIds()).has(icon)) {
     return { error: "没有这个头像" };
   }
