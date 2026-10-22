@@ -3,8 +3,8 @@
     uv run uvicorn api:app --app-dir data --port 8000
 
 Env: DUO_INTERNAL_SECRET (required on every request when set; the site sends it), DUO_DB (SQLite path or Postgres URL; else DATABASE_URL, else lol_duo.sqlite), DUO_GAP_TABLE (段位差 JSON from
-evaluate.py, default data/rank_gap.json), DUO_SCORE_SCALE (搭配评分 scale from score_scale.py,
-default data/score_scale.json; fitted in the background at startup if missing), RIOT_API_KEY via .env.
+evaluate.py, default data/rank_gap.json), RIOT_API_KEY via .env. The 搭配评分 scale is read from the
+database (score_scale.py saves it there) and fitted in the background when missing or a day old.
 New players are fetched in a background job whose progress the site polls (PRD §5.2).
 """
 import json
@@ -31,8 +31,8 @@ from stats_source import CachedSource, OwnDataSource
 
 DB_PATH = db.default_target()
 GAP_TABLE = predict.load_gap_table(os.environ.get("DUO_GAP_TABLE", str(Path(__file__).parent / "rank_gap.json")))
-SCORE_SCALE_PATH = os.environ.get("DUO_SCORE_SCALE", str(Path(__file__).parent / "score_scale.json"))
 SCALE_REFIT_SECONDS = 24 * 3600   # the dev key's daily collection; a production key would collect more often
+SCALE_CHECK_SECONDS = 3600        # how often to pick up a scale fitted elsewhere (score_scale.py, another machine)
 MAX_PICKS, MAX_PICK_ROLES = 5, 2   # PRD §2.3: up to 5 自选英雄 in up to 2 positions
 MAX_DECK = 200     # 牌堆 size cap for one request
 MAX_CANDIDATES = 5000   # 会员 the site may send for one 牌堆
@@ -55,7 +55,7 @@ async def require_internal_secret(request: Request, call_next):
             request.headers.get("x-duo-internal", "").encode(), INTERNAL_SECRET.encode()):
         return JSONResponse({"detail": "forbidden"}, status_code=403)
     return await call_next(request)
-scale = score_scale.load_scale(SCORE_SCALE_PATH)
+scale = None   # loaded from the database at startup
 jobs = {}
 jobs_lock = threading.Lock()
 _client = None
@@ -83,35 +83,37 @@ def riot_client():
 
 @app.on_event("startup")
 def keep_score_scale_fresh():
-    """Without a saved scale, fit one from the database in the background; scores are None until then.
-    The collector adds data every day, so a scale older than SCALE_REFIT_SECONDS is refitted while
-    the old one keeps serving."""
+    """Load the saved scale from the database; without one, fit it in the background (scores are None
+    until then). The collector adds data every day, so a scale older than SCALE_REFIT_SECONDS is refitted
+    while the old one keeps serving, and one saved by score_scale.py or another machine is picked up."""
 
-    def refit():
+    def check():
         global scale
-        conn = db.connect(DB_PATH)
-        try:
+        with connect() as conn:
+            stored = score_scale.load_scale(conn)
+            if stored and stored["fitted_at"] > (scale or {}).get("fitted_at", 0):
+                scale = stored
+            if scale and time.time() - scale["fitted_at"] < SCALE_REFIT_SECONDS:
+                return
             fitted = score_scale.fit(conn, GAP_TABLE)
-        finally:
-            conn.close()
-        if fitted:
-            scale = fitted
-            try:
-                with open(SCORE_SCALE_PATH, "w") as f:
-                    json.dump(fitted, f, indent=2)
-            except OSError:
-                pass   # read-only checkout: keep it in memory only
+            if fitted:
+                score_scale.save_scale(conn, fitted)
+                scale = fitted
 
     def run():
-        if scale:
-            time.sleep(max(0, scale.get("fitted_at", 0) + SCALE_REFIT_SECONDS - time.time()))
         while True:
             try:
-                refit()
+                check()
             except Exception as e:   # e.g. the database is briefly unreachable; try again next time
-                print(f"score scale fit failed: {type(e).__name__}", flush=True)
-            time.sleep(SCALE_REFIT_SECONDS)
+                print(f"score scale check failed: {type(e).__name__}", flush=True)
+            time.sleep(SCALE_CHECK_SECONDS)
 
+    global scale
+    try:   # synchronously, so the first requests already have scores
+        with connect() as conn:
+            scale = score_scale.load_scale(conn)
+    except Exception as e:
+        print(f"score scale load failed: {type(e).__name__}", flush=True)
     threading.Thread(target=run, daemon=True).start()
 
 

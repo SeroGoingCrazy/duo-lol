@@ -253,10 +253,19 @@ def test_score_compares_only_same_positions():
         assert not score_scale.compared_with(scale, roles)[1]
 
 
-def test_old_scale_without_positions_is_refitted(tmp_path):
-    path = tmp_path / "score_scale.json"
-    path.write_text('{"mean": 0.5, "std": 0.01, "pairs": 300}')
-    assert score_scale.load_scale(str(path)) is None
+def test_scale_is_saved_in_the_database(client):
+    with db.connect(DB) as conn:
+        scale = score_scale.fit(conn)
+        score_scale.save_scale(conn, scale)
+        score_scale.save_scale(conn, {**scale, "fitted_at": scale["fitted_at"] + 1})   # replaces, one row
+        assert score_scale.load_scale(conn) == {**scale, "fitted_at": scale["fitted_at"] + 1}
+        assert conn.execute("SELECT count(*) FROM score_scale").fetchone()[0] == 1
+
+
+def test_old_scale_without_positions_is_refitted():
+    with db.connect(DB) as conn:
+        score_scale.save_scale(conn, {"mean": 0.5, "std": 0.01, "pairs": 300, "fitted_at": 1})
+        assert score_scale.load_scale(conn) is None
 
 
 @pytest.mark.parametrize("a, b, ok", [

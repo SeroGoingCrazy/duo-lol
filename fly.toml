@@ -4,13 +4,6 @@ primary_region = "iad"   # US East, next to Neon and the NA players
 
 [build]
 
-[env]   # the database is the DATABASE_URL secret (Neon)
-  DUO_SCORE_SCALE = "/data/score_scale.json"
-
-[mounts]
-  source = "duo_data"
-  destination = "/data"
-
 [http_service]
   internal_port = 8000
   force_https = true

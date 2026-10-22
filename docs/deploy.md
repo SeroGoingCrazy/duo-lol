@@ -7,13 +7,12 @@ PRD-v2 §6 的方案：网站在 Vercel，Python API 在 Fly.io（美东），�
 
 ```sh
 fly launch --no-deploy            # 用仓库里的 fly.toml 和 Dockerfile，app 名可以改
-fly volumes create duo_data --region iad --size 3
 fly secrets set RIOT_API_KEY=RGAPI-... DUO_INTERNAL_SECRET=$(openssl rand -hex 32) DATABASE_URL='postgresql://...'
 fly deploy
 ```
 
 - `DATABASE_URL` 是 Neon 的连接串（和网站用的同一个）。Python 会自己建 `data` schema 和表；连接串里的 `-pooler` 会被换成直连地址，因为连接池会丢掉 schema 设置。
-- 磁盘卷只存拟合好的搭配评分（`score_scale.json`），第一次启动时在后台按数据库拟合。数据多了以后想重新拟合：`fly ssh console -C "rm /data/score_scale.json"` 再 `fly machine restart`。
+- 不需要磁盘卷。搭配评分的拟合结果存在数据库的 `score_scale` 表里，数据库里没有时 API 在后台拟合，之后每天重拟一次；本地跑 `uv run python data/score_scale.py` 也会写进同一张表，线上一小时内会换成新的。以前建过 `duo_data` 卷的话，可以用 `fly volumes destroy` 删掉。
 - **`DUO_INTERNAL_SECRET` 必须设。** 设了以后，Python API 只接受带这个密钥的请求，浏览器只能通过网站允许的几个接口（`web/app/api/[...path]`）访问它，Riot 头像查询和会员牌堆接口不会被直接调用。
 - 开发者 Key 每 24 小时过期，过期后 `fly secrets set RIOT_API_KEY=...` 换新的（会自动重启）。正式上线前要申请 Personal 或 Production Key。
 

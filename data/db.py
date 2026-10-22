@@ -71,6 +71,11 @@ CREATE TABLE IF NOT EXISTS seed_progress (    -- seed players whose recent games
     puuid TEXT PRIMARY KEY,
     matches_per_player INTEGER NOT NULL       -- how many recent games were requested
 );
+CREATE TABLE IF NOT EXISTS score_scale (      -- 搭配评分 scale (score_scale.py); one row, shared by every API machine
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    scale TEXT NOT NULL,                      -- JSON written by score_scale.fit
+    fitted_at INTEGER NOT NULL
+);
 """
 
 
