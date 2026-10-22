@@ -10,29 +10,38 @@ async function login(page: Page, name: string) {
   await expect(page).toHaveURL(/\/account$/);
 }
 
-async function startBinding(page: Page, riotId: string) {
+async function bind(page: Page, riotId: string) {
   await page.getByLabel("你的 Riot ID").fill(riotId);
-  await page.getByRole("button", { name: "下一步" }).click();
+  await page.getByRole("button", { name: "绑定", exact: true }).click();
 }
 
-test("登录: bind a Riot ID by wearing the asked icon, set 偏好, then 注销", async ({ page }) => {
+const iconOf = async (page: Page, testId = "avatar") =>
+  Number((await page.getByTestId(testId).first().getAttribute("src"))?.match(/profileicon\/(\d+)\.png/)?.[1]);
+
+test("登录: bind a Riot ID (未验证, ADR-0011), pick a 头像, set 偏好, then 注销", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("link", { name: "登录" }).click();
   await login(page, "binder");
   await expect(page.getByRole("link", { name: "binder" })).toBeVisible();
   await expect(page.getByTestId("prefs")).toContainText("绑定 Riot 账号后");
 
-  await startBinding(page, "Binder#NA1");
-  const icon = Number((await page.getByTestId("challenge-icon").innerText()).replace("#", ""));
-
-  // still wearing the old icon: told what to change
-  await page.getByRole("button", { name: "验证" }).click();
-  await expect(page.getByTestId("bind-riot").getByRole("alert")).toContainText(`需要换成 #${icon}`);
-
-  // "changes it in the client", then 验证 passes
-  await page.request.post(`${API}/api/fake/icon`, { data: { riot_id: "Binder#NA1", icon } });
-  await page.getByRole("button", { name: "验证" }).click();
+  // binding takes effect at once, marked 未验证, and the 头像 becomes the in-game icon
+  await page.request.post(`${API}/api/fake/icon`, { data: { riot_id: "Binder#NA1", icon: 7 } });
+  await bind(page, "Binder#NA1");
   await expect(page.getByTestId("bound-riot-id")).toHaveText("Binder#NA1");
+  await expect(page.getByTestId("riot-unverified")).toHaveText("未验证");
+  await expect.poll(() => iconOf(page)).toBe(7);
+
+  // pick another Riot icon by searching its id, then go back to the in-game one
+  const card = page.getByTestId("avatar-card");
+  await card.getByRole("button", { name: "从 Riot 头像里选" }).click();
+  await card.getByLabel("搜索头像").fill("12");
+  await card.getByRole("radiogroup").getByRole("radio").first().click();
+  await card.getByRole("button", { name: "用这个头像" }).click();
+  await expect(card.getByText("头像已更新")).toBeVisible();
+  await expect.poll(() => iconOf(page, "nav-avatar")).toBe(12);
+  await card.getByRole("button", { name: "用我游戏里的头像" }).click();
+  await expect.poll(() => iconOf(page, "nav-avatar")).toBe(7);
 
   // 偏好: at most two positions, 同意被推荐 starts off
   const prefs = page.getByTestId("prefs");
@@ -52,22 +61,25 @@ test("登录: bind a Riot ID by wearing the asked icon, set 偏好, then 注销"
   await page.getByRole("button", { name: "确认注销" }).click();
   await expect(page.getByRole("link", { name: "登录" })).toBeVisible();
   await login(page, "binder");
-  await expect(page.getByRole("button", { name: "下一步" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "绑定", exact: true })).toBeVisible();
 });
 
-test("登录: one Riot account binds to one 会员", async ({ browser }) => {
+test("登录: one Riot account binds to one 会员 until they unbind it", async ({ browser }) => {
   const first = await (await browser.newContext()).newPage();
   await login(first, "owner");
-  await startBinding(first, "Owner#NA1");
-  const icon = Number((await first.getByTestId("challenge-icon").innerText()).replace("#", ""));
-  await first.request.post(`${API}/api/fake/icon`, { data: { riot_id: "Owner#NA1", icon } });
-  await first.getByRole("button", { name: "验证" }).click();
+  await bind(first, "Owner#NA1");
   await expect(first.getByTestId("bound-riot-id")).toHaveText("Owner#NA1");
 
   const second = await (await browser.newContext()).newPage();
   await login(second, "impostor");
-  await startBinding(second, "owner#na1");
-  await expect(second.getByTestId("bind-riot").getByRole("alert")).toContainText("已经绑定了别的会员");
+  await bind(second, "owner#na1");
+  await expect(second.getByTestId("bind-riot").getByRole("alert")).toContainText("已经被别的会员绑定");
+
+  // 换一个 Riot ID frees it
+  await first.getByRole("button", { name: "换一个 Riot ID" }).click();
+  await expect(first.getByRole("button", { name: "绑定", exact: true })).toBeVisible();
+  await bind(second, "owner#na1");
+  await expect(second.getByTestId("bound-riot-id")).toHaveText("Owner#NA1");
 });
 
 test("account page needs login", async ({ page }) => {

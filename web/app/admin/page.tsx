@@ -4,10 +4,11 @@ import { notFound } from "next/navigation";
 import { auth } from "@/auth";
 import { Button } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { getDb, schema } from "@/lib/db";
 import { isAdmin, SUSPEND_AFTER } from "@/lib/deckServer";
 import { getT } from "@/lib/lang";
-import { dismissReports, restoreMember, suspendMember } from "./actions";
+import { dismissReports, restoreMember, suspendMember, unbindRiotId } from "./actions";
 
 export async function generateMetadata(): Promise<Metadata> {
   return { title: (await getT())("管理") };
@@ -69,6 +70,14 @@ export default async function AdminPage() {
               ))}
             </ul>
           )}
+        </Card>
+        <Card data-testid="unbind">
+          <CardTitle>解除 Riot 绑定</CardTitle>
+          <p className="mb-3 text-sm text-muted-foreground">绑定暂时不验证（ADR-0011）。有人说自己的 Riot ID 被别人绑了，核实后在这里解除，对方的会员资料保留。</p>
+          <form action={unbindRiotId} className="flex flex-wrap gap-2">
+            <Input name="riot_id" aria-label="要解除的 Riot ID" placeholder="Name#NA1" required autoComplete="off" className="min-w-0 flex-1" />
+            <Button variant="outline">解除绑定</Button>
+          </form>
         </Card>
       </div>
     </>

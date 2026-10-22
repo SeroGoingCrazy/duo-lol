@@ -168,6 +168,8 @@ export function riotIdProblem(id: string): string | null {
 export type DuoRecord = { games: number; wins: number; last_played: number | null };
 export type DeckCard = Omit<Partner, "riot_id"> & {
   id: string; riot_id?: string; discord?: string | null; profile?: MemberProfile; duo_record?: DuoRecord | null;
+  /** after 互选: their 头像 image and whether Riot proved the Riot ID is theirs (ADR-0011) */
+  avatar?: string | null; riot_verified?: boolean;
 };
 
 // 会员 牌堆 (PRD-v2 §6.1), served by Next itself rather than the Python API.
@@ -177,7 +179,7 @@ export type Deck = {
   filter: DeckFilter; looking_until: string | null;
 };
 export type SwipeResult = {
-  mutual_like: boolean; match: { riot_id: string; discord: string | null; duo_record: DuoRecord | null } | null; likes_remaining: number;
+  mutual_like: boolean; match: { riot_id: string; discord: string | null; avatar: string | null; riot_verified: boolean; duo_record: DuoRecord | null } | null; likes_remaining: number;
 };
 
 export const getDeck = () => call<Deck>("/api/deck", { cache: "no-store" });

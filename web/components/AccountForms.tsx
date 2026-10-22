@@ -1,7 +1,7 @@
 "use client";
 import { useActionState, useState } from "react";
-import { BadgeCheck } from "lucide-react";
-import { cancelVerification, checkVerification, deleteAccount, savePrefs, startVerification, type ActionState } from "@/app/account/actions";
+import { BadgeCheck, CircleHelp } from "lucide-react";
+import { bindRiot, deleteAccount, savePrefs, unbindRiot, type ActionState } from "@/app/account/actions";
 import PositionIcon from "@/components/PositionIcon";
 import RiotIdField from "@/components/RiotIdField";
 import { Alert } from "@/components/ui/alert";
@@ -14,55 +14,34 @@ import { BIO_MAX, LANGUAGE_LABELS, LANGUAGES, PLAY_TIME_LABELS, PLAY_TIMES, togg
 import { cn } from "@/lib/utils";
 import { useT } from "@/components/LangProvider";
 
-const NONE: ActionState = {};
+export const NONE: ActionState = {};
 
-function Feedback({ state }: { state: ActionState }) {
+export function Feedback({ state }: { state: ActionState }) {
   const t = useT();
   if (state.error) return <Alert variant="error" className="mt-3">{t.api(state.error)}</Alert>;
   if (state.ok) return <p className="mt-3 text-sm text-good" role="status">{t.api(state.ok)}</p>;
   return null;
 }
 
-/** 绑定 Riot 账号 with 头像验证 (ADR-0005): enter the Riot ID, wear the icon we pick, then 验证. */
-export function BindRiotCard({ riotId, pending }: {
-  riotId: string | null;
-  pending: { riotId: string; iconId: number; iconUrl: string } | null;
-}) {
+/** 绑定 Riot 账号 (ADR-0011): type the Riot ID and it is bound, 未验证 until Riot Sign On can prove it. */
+export function BindRiotCard({ riotId, verified }: { riotId: string | null; verified: boolean }) {
   const [id, setId] = useState("");
   const t = useT();
-  const [started, start, starting] = useActionState(startVerification, NONE);
-  const [checked, check, checking] = useActionState(checkVerification, NONE);
+  const [bound, bind, binding] = useActionState(bindRiot, NONE);
 
   if (riotId) {
     return (
       <Card data-testid="bind-riot">
         <CardTitle>{t("Riot 账号")}</CardTitle>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <span className="font-semibold" data-testid="bound-riot-id">{riotId}</span>
-          <Badge className="bg-good/15 text-good"><BadgeCheck className="size-3.5" />{t("已验证")}</Badge>
+          <RiotVerifiedBadge verified={verified} />
         </div>
-        <Feedback state={checked} />
-      </Card>
-    );
-  }
-
-  if (pending) {
-    return (
-      <Card data-testid="bind-riot">
-        <CardTitle>{t("验证 {id}", { id: pending.riotId })}</CardTitle>
-        <div className="flex items-center gap-4">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={pending.iconUrl} alt={t("召唤师头像 #{n}", { n: pending.iconId })} width={64} height={64} className="rounded-lg border" />
-          <div className="text-sm">
-            <p>{t("在游戏客户端里把召唤师头像换成这个（")}<b data-testid="challenge-icon">#{pending.iconId}</b>{t("，所有账号都有），换好后点验证。")}</p>
-            <p className="mt-1 text-xs text-muted-foreground">{t("10 分钟内有效。验证成功后可以换回原来的头像。")}</p>
-          </div>
-        </div>
-        <div className="mt-5 flex flex-wrap gap-2">
-          <form action={check}><Button disabled={checking}>{checking ? t("验证中…") : t("验证")}</Button></form>
-          <form action={cancelVerification}><Button variant="ghost">{t("换一个 Riot ID")}</Button></form>
-        </div>
-        <Feedback state={checked} />
+        {!verified && (
+          <p className="mt-2 text-xs text-muted-foreground">{t("Riot 官方登录（RSO）开通后，可以一键验证这个账号是你的。冒用别人的账号会被举报下架。")}</p>
+        )}
+        <form action={unbindRiot} className="mt-4"><Button variant="outline" size="sm">{t("换一个 Riot ID")}</Button></form>
+        <Feedback state={bound} />
       </Card>
     );
   }
@@ -70,15 +49,23 @@ export function BindRiotCard({ riotId, pending }: {
   return (
     <Card data-testid="bind-riot">
       <CardTitle>{t("绑定 Riot 账号")}</CardTitle>
-      <form action={start} className="flex flex-wrap items-start gap-3">
+      <form action={bind} className="flex flex-wrap items-start gap-3">
         <input type="hidden" name="riot_id" value={id} />
         <RiotIdField label={t("你的 Riot ID")} placeholder="Name#NA1" value={id} onChange={setId} />
-        <Button className="mt-5 w-full sm:w-auto" disabled={starting || !id.trim()}>{starting ? t("查询中…") : t("下一步")}</Button>
+        <Button className="mt-5 w-full sm:w-auto" disabled={binding || !id.trim()}>{binding ? t("查询中…") : t("绑定")}</Button>
       </form>
-      <p className="mt-3 text-xs text-muted-foreground">{t("只能绑定美服账号。为了确认账号是你的，下一步会请你换一个指定的召唤师头像。")}</p>
-      <Feedback state={started} />
+      <p className="mt-3 text-xs text-muted-foreground">{t("只能绑定美服账号，输入后马上生效，头像会自动换成你游戏里的召唤师头像。")}</p>
+      <Feedback state={bound} />
     </Card>
   );
+}
+
+/** 已验证 when Riot proved the account (RSO, or the old 头像验证); 未验证 when the 会员 only typed it. */
+export function RiotVerifiedBadge({ verified }: { verified: boolean }) {
+  const t = useT();
+  return verified
+    ? <Badge className="bg-good/15 text-good" data-testid="riot-verified"><BadgeCheck className="size-3.5" />{t("已验证")}</Badge>
+    : <Badge className="bg-gold/15 text-gold" data-testid="riot-unverified"><CircleHelp className="size-3.5" />{t("未验证")}</Badge>;
 }
 
 /** 偏好: 想打的位置 (up to 2), 同意被推荐 (off by default) and whether 互选 shows the Discord name. */

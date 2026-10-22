@@ -5,11 +5,12 @@ import { usePathname } from "next/navigation";
 import { signOutNow } from "@/app/authActions";
 import { setLang } from "@/app/langActions";
 import { useT } from "@/components/LangProvider";
+import { Avatar } from "@/components/ProfileIconPicker";
 import { cn } from "@/lib/utils";
 
 const UNSEEN_POLL_MS = 60_000;
 
-export default function Nav({ member }: { member: { name: string; admin?: boolean } | null }) {
+export default function Nav({ member }: { member: { name: string; admin?: boolean; avatar?: string | null } | null }) {
   const path = usePathname();
   const t = useT();
   // 互选通知: the layout stays mounted across pages, so ask again on every page change and once a minute
@@ -53,6 +54,9 @@ export default function Nav({ member }: { member: { name: string; admin?: boolea
         {member ? (
           <>
             {member.admin && item("/admin", t("管理"))}
+            <Link href="/account" aria-label={t("我的账号")} className="ml-1 rounded-full no-underline" data-testid="nav-avatar">
+              <Avatar url={member.avatar ?? null} size={28} />
+            </Link>
             {item("/account", member.name || t("我的账号"))}
             <form action={signOutNow}>
               <button className="cursor-pointer rounded-md px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground">{t("退出")}</button>
