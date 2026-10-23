@@ -19,7 +19,7 @@ test("a 喜欢 and a 互选 show in the nav until 找搭子 is opened, and the �
   // B is told about the 喜欢 on any page, and likes back from 喜欢我的人
   await b.goto("/account");
   await expect(badge(b)).toHaveText("1");
-  await b.getByRole("link", { name: /找搭子/ }).click();
+  await b.locator("nav").getByRole("link", { name: /找搭子/ }).click();
   await expect(badge(b)).toHaveCount(0);
   await b.getByRole("tab", { name: /喜欢我的人/ }).click({ timeout: 30_000 });
   await b.getByTestId("likes-list").getByRole("button").first().click();

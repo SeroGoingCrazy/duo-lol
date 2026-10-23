@@ -137,14 +137,14 @@ export async function deck() {
     duoRecords(me, shownMutual.map((r) => ({ id: r.members.id, riotId: r.members.riotId! }))),
   ]);
 
+  const avatar = await avatarUrls();
   const cards: DeckCard[] = [];
   for (const r of unseen) {
     const p = scored.get(r.members.id);
-    if (p) cards.push(card(r.members.id, p, profileOf(r.member_prefs, now)));
+    if (p) cards.push({ ...card(r.members.id, p, profileOf(r.member_prefs, now)), avatar: avatar(r.members.avatarIconId) });
   }
   cards.sort((a, b) => b.win_rate - a.win_rate);
   // a 互选 stays listed even if the pair can no longer be scored (say, one of them climbed out of duo range)
-  const avatar = await avatarUrls();
   const mutualCards: DeckCard[] = mutualRows
     .filter((r) => !hidden.has(r.members.id))
     .map((r) => {

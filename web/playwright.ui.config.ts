@@ -11,7 +11,7 @@ export default defineConfig({
   },
   webServer: {
     command: "node node_modules/next/dist/bin/next dev -p 3100",
-    env: { DUO_NEXT_DIST_DIR: ".next-ui", APP_DB_DIR: ".next-ui/app-db", AUTH_SECRET: "ui-tests-only-secret" },
+    env: { DUO_NEXT_DIST_DIR: ".next-ui", APP_DB_DIR: ".next-ui/app-db", DATABASE_URL: "", DUO_API_URL: "http://127.0.0.1:8100", AUTH_SECRET: "ui-tests-only-secret" },
     url: "http://127.0.0.1:3100",
     reuseExistingServer: !process.env.CI,
   },

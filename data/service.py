@@ -67,7 +67,7 @@ def build_player(conn, puuid, riot_id, tier, division, league_points, match_ids_
             "league_points": league_points, "unranked": tier is None, "profile": profile}
 
 
-def lookup_player(conn, client, riot_id, on_progress=None):
+def lookup_player(conn, client, riot_id, on_progress=None, on_stage=None):
     """Cached player, or fetch account, Solo/Duo rank and up to 100 games this season."""
     hit = cached_player(conn, riot_id)
     if hit:
@@ -78,10 +78,21 @@ def lookup_player(conn, client, riot_id, on_progress=None):
         raise PlayerNotFound(f"找不到美服玩家 {riot_id}")
     puuid = account["puuid"]
     canonical = f'{account["gameName"]}#{account["tagLine"]}'
+    if on_stage:
+        on_stage("rank", {"riot_id": canonical})
     entry = client.solo_entry(puuid)
-    ids = player_profile.season_match_ids(client, puuid)
-    player_profile.store_matches(conn, client, ids, on_progress, puuid=puuid)
     tier, division, lp = (entry["tier"], entry["rank"], entry["leaguePoints"]) if entry else (None, None, None)
+    if on_stage:
+        on_stage("history", {"riot_id": canonical, "tier": tier, "division": division,
+                             "league_points": lp, "unranked": tier is None})
+    ids = player_profile.season_match_ids(client, puuid)
+    if on_stage:
+        on_stage("matches")
+    if on_progress:
+        on_progress(0, len(ids))
+    player_profile.store_matches(conn, client, ids, on_progress, puuid=puuid)
+    if on_stage:
+        on_stage("analysis")
     conn.execute(
         """INSERT INTO player_cache
              (puuid, riot_id, riot_id_key, tier, division, league_points, match_ids, fetched_at)

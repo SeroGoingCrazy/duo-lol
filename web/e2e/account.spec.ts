@@ -51,7 +51,7 @@ test("登录: bind a Riot ID (未验证, ADR-0011), pick a 头像, set 偏好, t
   await prefs.getByText("辅助").click();
   await expect(prefs.getByRole("checkbox", { name: "上单" })).toBeDisabled();
   await prefs.getByLabel(/同意被推荐/).check();
-  await prefs.getByRole("button", { name: "保存" }).click();
+  await prefs.getByRole("button", { name: "保存", exact: true }).click();
   await expect(prefs.getByText("已保存")).toBeVisible();
   await page.reload();
   await expect(prefs.getByLabel(/同意被推荐/)).toBeChecked();
@@ -86,4 +86,38 @@ test("登录: one Riot account binds to one 会员 until they unbind it", async 
 test("account page needs login", async ({ page }) => {
   await page.goto("/account");
   await expect(page).toHaveURL(/\/login$/);
+});
+
+test("new members explicitly opt in before continuing to real members", async ({ page }) => {
+  await login(page, "onboarding");
+  const steps = page.getByTestId("onboarding");
+  await expect(steps.getByText("三步开始找搭子")).toBeVisible();
+  await expect(steps.locator('[aria-current="step"]')).toContainText("绑定 Riot 账号");
+  await bind(page, "Onboarding#NA1");
+  await expect(page.getByTestId("bound-riot-id")).toHaveText("Onboarding#NA1");
+  await expect(steps.locator('[aria-current="step"]')).toContainText("偏好与推荐");
+  await page.getByRole("link", { name: "下一步：偏好与推荐" }).click();
+
+  const prefs = page.getByTestId("prefs");
+  const consent = prefs.getByLabel(/同意被推荐/);
+  const start = prefs.getByRole("button", { name: "保存并开始找搭子" });
+  await expect(consent).not.toBeChecked();
+  await expect(start).toBeDisabled();
+  // Consent and the next step precede optional profile fields, so neither is buried in the form.
+  expect(await prefs.locator("input").first().getAttribute("name")).toBe("recommend_opt_in");
+  await consent.check();
+  await start.click();
+  await expect(page).toHaveURL(/\/find$/);
+  await expect(page.getByTestId("deck-owner")).toContainText("Onboarding#NA1");
+  await expect(page.getByTestId("demo-notice")).toHaveCount(0);
+
+  await page.goto("/account");
+  await expect(steps.getByText("准备好了，去认识真实会员")).toBeVisible();
+  await expect(consent).toBeChecked();
+  await consent.uncheck();
+  await prefs.getByRole("button", { name: "保存", exact: true }).click();
+  await expect(prefs.getByText("已保存")).toBeVisible();
+  await page.goto("/find");
+  await expect(page.getByTestId("demo-notice").getByRole("link", { name: "完成偏好与推荐" }))
+    .toHaveAttribute("href", "/account#recommendation");
 });

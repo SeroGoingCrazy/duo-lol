@@ -11,9 +11,9 @@ async function toEnglish(page: Page) {
 test("中文 by default even in an English browser; the switch picks English and back", async ({ page }) => {
   await page.goto("/");
   await expect(page.locator("html")).toHaveAttribute("lang", "zh-CN");
-  await expect(page.getByRole("link", { name: "查组合" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "查组合", exact: true })).toBeVisible();
   await toEnglish(page);
-  await expect(page.getByRole("link", { name: "Duo check" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Duo check", exact: true })).toBeVisible();
   await page.getByLabel("Player A").fill("Alpha#NA1");
   await page.getByLabel("Player B").fill("Bravo#NA1");
   await page.getByRole("button", { name: "Predict" }).click();
@@ -27,7 +27,7 @@ test("中文 by default even in an English browser; the switch picks English and
 
   await page.getByTestId("lang-switch").getByRole("button", { name: "中文" }).click();
   await expect(page.locator("html")).toHaveAttribute("lang", "zh-CN");
-  await expect(page.getByRole("link", { name: "查组合" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "查组合", exact: true })).toBeVisible();
 });
 
 test("English demo deck: card text and the model's reasons", async ({ page }) => {

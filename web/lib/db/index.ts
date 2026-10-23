@@ -14,7 +14,9 @@ async function open(): Promise<Db> {
     const { default: postgres } = await import("postgres");
     const { drizzle } = await import("drizzle-orm/postgres-js");
     const { migrate } = await import("drizzle-orm/postgres-js/migrator");
-    const db = drizzle(postgres(process.env.DATABASE_URL), { schema });
+    // App timestamps are stored without a zone and Drizzle writes JS dates in UTC.
+    // Every pooled connection must also evaluate defaultNow() in UTC.
+    const db = drizzle(postgres(process.env.DATABASE_URL, { connection: { TimeZone: "UTC" } }), { schema });
     await migrate(db, { migrationsFolder: MIGRATIONS });
     return db as unknown as Db;
   }
@@ -24,7 +26,9 @@ async function open(): Promise<Db> {
   const dataDir = process.env.APP_DB_DIR ?? path.join(process.cwd(), ".data", "app");
   // PGlite creates its data directory, but not missing parent directories.
   await mkdir(path.dirname(dataDir), { recursive: true });
-  const db = drizzle(new PGlite(dataDir), { schema });
+  const client = new PGlite(dataDir);
+  await client.exec("SET TIME ZONE 'UTC'");
+  const db = drizzle(client, { schema });
   await migrate(db, { migrationsFolder: MIGRATIONS });
   return db as unknown as Db;
 }

@@ -50,6 +50,13 @@
       "when": 1792652632872,
       "tag": "0006_riot_id_binding",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1792782897363,
+      "tag": "0007_funnel_events",
+      "breakpoints": true
     }
   ]
 }

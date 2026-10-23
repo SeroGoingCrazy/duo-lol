@@ -6,7 +6,7 @@ export async function generateMetadata(): Promise<Metadata> {
   return { title: (await getT())("隐私政策") };
 }
 
-const UPDATED = "2026-10-21";
+const UPDATED = "2026-10-23";
 
 // PRD-v2 §9. Keep in step with what web/lib/db/schema.ts and data/db.py actually store.
 export default async function PrivacyPage() {
@@ -22,6 +22,7 @@ export default async function PrivacyPage() {
           <li><b>Riot 账号</b>：你绑定的 Riot ID、Riot 提供的账号标识（PUUID），以及你选的召唤师头像编号（默认是你游戏里的头像）。</li>
           <li><b>对局数据</b>：通过 Riot 官方 API 读取的美服单双排公开对局（英雄、位置、胜负、段位），用于计算预测胜率和全服统计。</li>
           <li><b>你在网站上的操作</b>：偏好（想打的位置、简介、语言、开麦、常玩时间、是否同意被推荐、自选英雄）、喜欢和跳过、互选、拉黑和举报，以及最近一次登录时间。</li>
+          <li><b>匿名使用统计</b>：使用浏览器标签页内的随机编号，记录访问首页、完成查询、绑定、开启推荐、滑卡等步骤，用来发现上手流程中的障碍。统计不含 Riot ID、Discord 名、会员编号、输入内容或页面查询参数，演示与真实会员分开统计；尊重浏览器的“不跟踪”设置。</li>
         </ul>
       </Card>
       <Card className="space-y-3">
@@ -41,6 +42,7 @@ export default async function PrivacyPage() {
           <li>在“我的账号”里注销后，我们立刻删除你的会员资料、登录信息、偏好、滑卡、互选、拉黑和举报记录。</li>
           <li>如果你的 Riot 账号因举报被管理员暂停，注销后我们仍保留这个账号标识，防止重新注册绕过处理。</li>
           <li>公开对局数据作为全服统计的一部分保留，但不再和你的会员身份关联。</li>
+          <li>匿名步骤统计保留约 30 天，过期记录在下一次统计写入时清理。</li>
         </ul>
       </Card>
       <Card className="space-y-3">
@@ -64,6 +66,7 @@ function PrivacyEn() {
           <li><b>Riot account</b>: the Riot ID you link, the account identifier (PUUID) Riot provides, and the summoner icon you pick as your avatar (your in-game icon by default).</li>
           <li><b>Match data</b>: public NA Ranked Solo/Duo games read through Riot&apos;s official API (champions, roles, wins, ranks), used to predict win rates and for overall statistics.</li>
           <li><b>What you do here</b>: preferences (roles, bio, languages, voice, play times, whether you want to be recommended, picked champions), likes and passes, matches, blocks and reports, and when you last logged in.</li>
+          <li><b>Anonymous usage counts</b>: a random ID for the browser tab records steps such as opening the home page, completing a check, linking an account, enabling recommendations and swiping. This helps us find onboarding problems. Counts exclude Riot IDs, Discord names, member IDs, form contents and URL query parameters. Demo and member events are separate. We respect the browser&apos;s Do Not Track setting.</li>
         </ul>
       </Card>
       <Card className="space-y-3">
@@ -83,6 +86,7 @@ function PrivacyEn() {
           <li>Deleting your account in My account removes your membership, login, preferences, swipes, matches, blocks and reports right away.</li>
           <li>If an admin paused your Riot account after reports, we keep that account identifier after deletion so re-registering can&apos;t undo it.</li>
           <li>Public match data stays part of the overall statistics but is no longer tied to you as a member.</li>
+          <li>Anonymous step counts are kept for about 30 days; expired records are removed on subsequent analytics writes.</li>
         </ul>
       </Card>
       <Card className="space-y-3">

@@ -2,6 +2,7 @@
 import json
 import os
 import tempfile
+import threading
 import time
 
 import pytest
@@ -57,6 +58,64 @@ def test_lookup_then_cached(client):
     assert cached.status_code == 200 and time.monotonic() - t0 < 10   # PRD §5.2
     assert cached.json()["games"] == 40
     assert 0 < cached.json()["wins"] < 40   # over every game, not just the top 10 champions listed
+
+
+def test_lookup_previews_identity_and_rank_before_match_download(client, monkeypatch):
+    rank_started, release_rank = threading.Event(), threading.Event()
+    match_started, release_match = threading.Event(), threading.Event()
+
+    class StagedClient(fake_riot.FakeRiotClient):
+        def solo_entry(self, puuid):
+            rank_started.set()
+            assert release_rank.wait(5)
+            return super().solo_entry(puuid)
+
+        def match(self, match_id):
+            match_started.set()
+            assert release_match.wait(5)
+            return super().match(match_id)
+
+    monkeypatch.setattr(api, "_client", StagedClient())
+    job = client.post("/api/lookups", json={"riot_id": "StagePreview#NA1"}).json()["job_id"]
+    try:
+        assert rank_started.wait(5)
+        identity = client.get(f"/api/lookups/{job}").json()
+        assert identity["stage"] == "rank" and identity["status"] == "running"
+        assert identity["preview"] == {"riot_id": "StagePreview#NA1"}
+        assert "player" not in identity
+
+        release_rank.set()
+        assert match_started.wait(5)
+        downloading = client.get(f"/api/lookups/{job}").json()
+        assert downloading["stage"] == "matches" and downloading["status"] == "running"
+        assert downloading["done"] == 0 and downloading["total"] == 40
+        assert downloading["preview"]["division"] == "II"
+        assert downloading["preview"]["league_points"] == 50
+        assert downloading["preview"]["unranked"] is False
+        assert set(downloading["preview"]) == {"riot_id", "tier", "division", "league_points", "unranked"}
+        assert "player" not in downloading
+    finally:
+        release_rank.set()
+        release_match.set()
+        result = lookup(client, "StagePreview#NA1")
+    assert result["status"] == "done" and result["player"]["games"] == 40
+    completed = client.get(f"/api/lookups/{job}").json()
+    assert completed["stage"] == "done" and completed["done"] == completed["total"] == 40
+
+
+def test_lookup_without_games_finishes_with_rank_preview(client, monkeypatch):
+    class NoGamesClient(fake_riot.FakeRiotClient):
+        def solo_entry(self, puuid):
+            return None
+
+        def season_match_ids(self, *args, **kwargs):
+            return []
+
+    monkeypatch.setattr(api, "_client", NoGamesClient())
+    result = lookup(client, "NoGamesYet#NA1")
+    assert result["status"] == result["stage"] == "done"
+    assert result["done"] == result["total"] == result["player"]["games"] == 0
+    assert result["preview"]["unranked"] is True and result["preview"]["tier"] is None
 
 
 def test_recent_games_newest_first(client):
@@ -161,8 +220,10 @@ def test_recommendations_top5_duo_eligible(client):
         assert recommend.can_duo(me, ranks[p["riot_id"]])
         assert p["riot_id"] != out["me"]["riot_id"]
         assert set(p) == {"puuid", "riot_id", "tier", "division", "win_rate", "win_rate_delta", "score", "score_by_roles",
-                          "roles", "top_pairs", "reasons"}
+                          "roles", "top_pairs", "reasons", "games", "champions"}
         assert 1 <= len(p["top_pairs"]) <= 3
+        assert p["games"] == sum(c["games"] for c in p["champions"])
+        assert p["games"] >= 20
 
 
 def test_cached_lookup_answers_without_a_job(client):
@@ -217,6 +278,9 @@ def test_deck_scores_a_data_poor_candidate_from_self_report(client):
     cand["self_report"] = {"tier": "GOLD", "picks": [{"champion": "Ahri", "position": "MIDDLE"}]}
     out = client.post("/api/recommendations", json={**ask, "candidates": [cand]}).json()["partners"]
     assert [p["riot_id"] for p in out] == [newbie["riot_id"]]
+    # Self-reported prediction weights must not become invented games or played champions on a card.
+    assert out[0]["games"] == newbie["games"]
+    assert out[0]["champions"] == newbie["champions"]
 
 
 def test_score_follows_fitted_normal(client):

@@ -1,6 +1,8 @@
 "use client";
-import { useActionState, useState } from "react";
-import { BadgeCheck, CircleHelp } from "lucide-react";
+import { useActionState, useEffect, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { ArrowRight, BadgeCheck, CircleHelp } from "lucide-react";
 import { bindRiot, deleteAccount, savePrefs, unbindRiot, type ActionState } from "@/app/account/actions";
 import PositionIcon from "@/components/PositionIcon";
 import RiotIdField from "@/components/RiotIdField";
@@ -13,6 +15,7 @@ import { POSITIONS } from "@/lib/labels";
 import { BIO_MAX, LANGUAGE_LABELS, LANGUAGES, PLAY_TIME_LABELS, PLAY_TIMES, toggled, type Voice } from "@/lib/profile";
 import { cn } from "@/lib/utils";
 import { useT } from "@/components/LangProvider";
+import { trackFunnel } from "@/lib/analytics";
 
 export const NONE: ActionState = {};
 
@@ -29,6 +32,9 @@ export function BindRiotCard({ riotId, verified }: { riotId: string | null; veri
   const t = useT();
   const [bound, bind, binding] = useActionState(bindRiot, NONE);
   const [unbound, unbind, unbinding] = useActionState(unbindRiot, NONE);
+  useEffect(() => {
+    if (bound.ok) trackFunnel("riot_bound");
+  }, [bound]);
 
   if (riotId) {
     return (
@@ -41,6 +47,9 @@ export function BindRiotCard({ riotId, verified }: { riotId: string | null; veri
         {!verified && (
           <p className="mt-2 text-xs text-muted-foreground">{t("Riot 官方登录（RSO）开通后，可以一键验证这个账号是你的。冒用别人的账号会被举报下架。")}</p>
         )}
+        <Button asChild variant="outline" size="sm" className="mt-4">
+          <Link href="#recommendation">{t("下一步：偏好与推荐")}<ArrowRight /></Link>
+        </Button>
         <form action={unbind} className="mt-4"><Button variant="outline" size="sm" disabled={unbinding}>{t("换一个 Riot ID")}</Button></form>
         <p className="mt-2 text-xs text-muted-foreground">{t("换号会结束你现在的互选。")}</p>
         <Feedback state={unbound.error ? unbound : bound} />
@@ -76,8 +85,9 @@ export type PrefsValues = {
   bio: string; languages: string[]; voice: Voice | null; playTimes: string[];
 };
 
-export function PrefsCard({ verified, prefs, discordName }: {
-  verified: boolean;
+export function PrefsCard({ bound, suspended = false, prefs, discordName }: {
+  bound: boolean;
+  suspended?: boolean;
   prefs: PrefsValues;
   discordName: string;
 }) {
@@ -86,8 +96,15 @@ export function PrefsCard({ verified, prefs, discordName }: {
   const [voice, setVoice] = useState(prefs.voice ?? "");
   const [playTimes, setPlayTimes] = useState(prefs.playTimes);
   const [bio, setBio] = useState(prefs.bio);
+  const [recommendOptIn, setRecommendOptIn] = useState(prefs.recommendOptIn);
   const t = useT();
   const [state, save, saving] = useActionState(savePrefs, NONE);
+  const router = useRouter();
+  useEffect(() => {
+    if (!state.ok) return;
+    if (state.recommendationEnabled) trackFunnel("recommendation_enabled");
+    if (state.next) router.push(state.next);
+  }, [state, router]);
   const toggle = (p: string) =>
     setPositions((cur) => (cur.includes(p) ? cur.filter((x) => x !== p) : cur.length < 2 ? [...cur, p] : cur));
   const flip = (set: React.Dispatch<React.SetStateAction<string[]>>, x: string) => set((cur) => toggled(cur, x));
@@ -95,11 +112,17 @@ export function PrefsCard({ verified, prefs, discordName }: {
 
   return (
     <Card data-testid="prefs">
-      <CardTitle>{t("偏好")}</CardTitle>
-      {!verified ? (
+      <CardTitle>{t("偏好与推荐")}</CardTitle>
+      {!bound ? (
         <p className="text-sm text-muted-foreground">{t("绑定 Riot 账号后才能设置偏好、进入推荐池。")}</p>
       ) : (
         <form action={save} className="space-y-4">
+          <label className="flex items-start gap-3 rounded-xl border border-neon-a/30 bg-neon-a/5 p-4 text-sm" data-testid="recommendation-consent">
+            <input type="checkbox" name="recommend_opt_in" checked={recommendOptIn} onChange={(e) => setRecommendOptIn(e.target.checked)} className="mt-1 size-4 shrink-0" />
+            <span><span className="font-semibold">{t("同意被推荐")}</span><span className="mt-1 block text-xs leading-relaxed text-muted-foreground">{t("勾选并保存后，你会出现在别人的牌堆里；取消勾选并保存后，立刻退出推荐池。")}</span>
+              <span className="mt-1 block text-xs text-muted-foreground">{t("Riot ID 和联系方式只在互选后展示。")}</span>
+            </span>
+          </label>
           <fieldset>
             <legend className={legend}>{t("想打的位置（最多 2 个）")}</legend>
             <div className="flex flex-wrap gap-2">
@@ -113,6 +136,13 @@ export function PrefsCard({ verified, prefs, discordName }: {
               })}
             </div>
           </fieldset>
+          <div className="flex flex-wrap items-center gap-3 border-b pb-4">
+            <Button name="intent" value="find" disabled={saving || !recommendOptIn || suspended}>
+              {saving ? t("保存中…") : t("保存并开始找搭子")}<ArrowRight />
+            </Button>
+            <p className="text-xs text-muted-foreground">{t("下面的资料都可选，可以稍后完善。")}</p>
+          </div>
+          <Feedback state={state} />
           <label className="block">
             <span className={cn(legend, "flex justify-between")}><span>{t("简介（会显示在卡片上）")}</span><span className="tabular-nums">{bio.length} / {BIO_MAX}</span></span>
             <textarea name="bio" rows={2} maxLength={BIO_MAX} value={bio} onChange={(e) => setBio(e.target.value)}
@@ -146,10 +176,6 @@ export function PrefsCard({ verified, prefs, discordName }: {
             </div>
           </fieldset>
           <label className="flex items-start gap-2 text-sm">
-            <input type="checkbox" name="recommend_opt_in" defaultChecked={prefs.recommendOptIn} className="mt-1" />
-            <span>{t("同意被推荐")}<span className="block text-xs text-muted-foreground">{t("勾选后你会出现在别人的牌堆里；随时可以关掉，关掉后立刻退出推荐池。")}</span></span>
-          </label>
-          <label className="flex items-start gap-2 text-sm">
             <input type="checkbox" name="show_discord" defaultChecked={prefs.showDiscord} className="mt-1" />
             <span>{t("互选后给对方看我的 Discord 名（{name}）", { name: discordName })}<span className="block text-xs text-muted-foreground">{t("不勾选的话，对方只看到你的 Riot ID。")}</span></span>
           </label>
@@ -160,7 +186,6 @@ export function PrefsCard({ verified, prefs, discordName }: {
           <Button disabled={saving}>{saving ? t("保存中…") : t("保存")}</Button>
         </form>
       )}
-      <Feedback state={state} />
     </Card>
   );
 }

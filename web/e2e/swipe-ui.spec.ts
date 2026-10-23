@@ -6,6 +6,11 @@ const partners = [
   { riot_id: "Third#NA1", score: 30, win_rate: 0.48, roles: { a: "MIDDLE", b: "BOTTOM" } },
 ].map((p) => ({
   ...p, tier: "GOLD", division: "II", win_rate_delta: 0.016,
+  games: 42, champions: [
+    { champion: "Lux", position: "UTILITY", games: 22, wins: 13 },
+    { champion: "LeeSin", position: "JUNGLE", games: 12, wins: 7 },
+    { champion: "Lux", position: "MIDDLE", games: 8, wins: 4 },
+  ],
   top_pairs: [{ champion_a: "Ahri", champion_b: "LeeSin", win_rate: 0.54, pair_games: 1234 }],
   reasons: ["MIDDLE 与 JUNGLE 位置互补", "Ahri 与 LeeSin 有足够对局数据", "推荐英雄组合表现较好"],
 }));
@@ -16,6 +21,7 @@ async function openDeck(page: Page) {
   await page.route("**/champions/names.json", (r) => r.fulfill({ json: {
     Ahri: { id: "Ahri", name: "九尾妖狐", title: "阿狸", english: "Ahri" },
     LeeSin: { id: "LeeSin", name: "盲僧", title: "李青", english: "Lee Sin" },
+    Lux: { id: "Lux", name: "光辉女郎", title: "拉克丝", english: "Lux" },
   } }));
   await page.route("**/api/recommendations", (r) => r.fulfill({ json: { partners, notes: [] } }));
   await page.goto("/find?me=Demo%23NA1");
@@ -26,7 +32,12 @@ test("details controls, pass, undo, mutual and persistence", async ({ page }) =>
   await openDeck(page);
   const card = page.getByTestId("swipe-card");
   await expect(card).not.toContainText("First#NA1");
-  await card.getByRole("button", { name: "查看全部" }).click();
+  await expect(card.getByTestId("avatar")).toBeVisible();
+  await expect(card.getByTestId("card-games")).toContainText("42 场单双排");
+  await expect(card.getByTestId("card-champions")).toContainText("光辉女郎30 场");
+  await expect(card.getByTestId("card-champions")).not.toContainText("九尾妖狐"); // suggested combo is not played history
+  await expect(card.getByTestId("likes-you-badge")).toHaveText("模拟喜欢");
+  await card.getByRole("button", { name: "看英雄组合" }).click();
   await expect(card.getByTestId("top-pairs")).toBeVisible();
   await card.getByRole("button", { name: "理由", exact: true }).click();
   await expect(card.getByTestId("reasons").locator("li")).toHaveCount(3);
@@ -39,10 +50,14 @@ test("details controls, pass, undo, mutual and persistence", async ({ page }) =>
   await page.getByRole("button", { name: "撤销上一次跳过" }).click();
   await expect(card.getByTestId("score")).toHaveText("86分");
   await page.getByRole("button", { name: "喜欢", exact: true }).click();
-  await expect(page.getByTestId("match-riot-id")).toHaveText("First#NA1");
+  await expect(page.getByTestId("match-dialog")).toContainText("模拟互选");
+  await expect(page.getByTestId("match-dialog")).toContainText("对方没有向你表达喜欢");
+  await expect(page.getByTestId("match-riot-id")).toHaveCount(0);
+  await expect(page.getByTestId("match-dialog").getByRole("button", { name: "复制" })).toHaveCount(0);
   await page.getByRole("button", { name: "继续滑" }).click();
   await page.reload();
-  await expect(page.getByTestId("mutual-list")).toContainText("First#NA1");
+  await expect(page.getByTestId("mutual-list")).toContainText("演示候选");
+  await expect(page.getByTestId("mutual-list")).not.toContainText("First#NA1");
   await expect(card.getByTestId("score")).toHaveText("42分");
 });
 
@@ -71,20 +86,23 @@ test("short drag springs back, vertical reading does not swipe, deliberate swipe
   await expect(page.getByText("剩余 2 / 3")).toBeVisible();
 });
 
-for (const colorScheme of ["light", "dark"] as const) {
-  test(`mobile layout and reduced motion: ${colorScheme}`, async ({ page }) => {
-    await page.setViewportSize({ width: 390, height: 844 });
+for (const [colorScheme, width, height] of [["light", 390, 844], ["dark", 390, 844], ["light", 375, 667]] as const) {
+  test(`mobile layout and reduced motion: ${colorScheme} ${width}x${height}`, async ({ page }) => {
+    await page.setViewportSize({ width, height });
     await page.emulateMedia({ colorScheme, reducedMotion: "reduce" });
     await openDeck(page);
     const card = page.getByTestId("swipe-card");
     const cardBox = (await card.boundingBox())!;
     const sidebarBox = (await page.getByTestId("deck-sidebar").boundingBox())!;
     expect(cardBox.y).toBeLessThan(sidebarBox.y);
-    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
-    await expect(card.getByRole("button", { name: "查看全部" })).toBeInViewport();
-    await expect(page.getByRole("button", { name: "喜欢", exact: true })).toBeInViewport();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
+    await expect(page.getByTestId("demo-simulation-notice")).toBeInViewport({ ratio: 1 });
+    await expect(card.getByRole("button", { name: "看英雄组合" })).toBeInViewport();
+    await expect(page.getByRole("button", { name: "喜欢", exact: true })).toBeInViewport({ ratio: 1 });
+    await expect(page.getByRole("button", { name: "跳过", exact: true })).toBeInViewport({ ratio: 1 });
+    await expect(card).toBeInViewport({ ratio: 1 });
     expect(await card.getByTestId("card-content").evaluate((el) => el.scrollHeight - el.clientHeight)).toBeLessThanOrEqual(1);
-    await page.screenshot({ path: `test-results/swipe-mobile-${colorScheme}.png`, fullPage: true });
+    await page.screenshot({ path: `test-results/swipe-mobile-${colorScheme}-${width}x${height}.png`, fullPage: true });
     await page.getByRole("button", { name: "跳过", exact: true }).click();
     await expect(card.getByTestId("score")).toHaveText("42分");
   });

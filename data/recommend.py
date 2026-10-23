@@ -127,6 +127,9 @@ def recommend(conn, source, me, gap_table=None, require_opt_in=False, top_n=TOP_
         if puuid == me["puuid"] or not can_duo(my_rank, rank):
             continue
         profile = player_profile.proficiency(conn, puuid, ids)
+        # Card context is observed history, never the synthetic weights used for 自选英雄.
+        games = profile["games"]
+        champions = profile["champions"]
         if profile["insufficient_data"]:
             if not reported:
                 continue
@@ -134,6 +137,7 @@ def recommend(conn, source, me, gap_table=None, require_opt_in=False, top_n=TOP_
         profile["tier"] = tier
         out = predict.predict_pair(source, me["profile"], profile, gap_table)
         if out:
-            results.append({"puuid": puuid, "riot_id": riot_id, "tier": tier, "division": rank[1], **out})
+            results.append({"puuid": puuid, "riot_id": riot_id, "tier": tier, "division": rank[1],
+                            "games": games, "champions": champions, **out})
     results.sort(key=lambda r: r["win_rate"], reverse=True)
     return results[:top_n]
