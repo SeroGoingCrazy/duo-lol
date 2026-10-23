@@ -27,7 +27,7 @@ import predict
 import recommend
 import score_scale
 import service
-from stats_source import CachedSource, OwnDataSource
+import stats_source
 
 DB_PATH = db.default_target()
 GAP_TABLE = predict.load_gap_table(os.environ.get("DUO_GAP_TABLE", str(Path(__file__).parent / "rank_gap.json")))
@@ -340,7 +340,7 @@ def pair(req: PairRequest):
         pb, prof_b, note_b = scored_profile(conn, req.b, req.b_self_report)
         if pa["puuid"] == pb["puuid"]:
             raise HTTPException(400, "两个 Riot ID 是同一个玩家，请填两个不同的人")
-        out = predict.predict_pair(CachedSource(OwnDataSource(conn)), prof_a, prof_b, GAP_TABLE)
+        out = predict.predict_pair(stats_source.default_source(conn), prof_a, prof_b, GAP_TABLE)
     if not out:
         raise HTTPException(422, "两人没有可分配的位置组合")
     notes = [n for n in (note_a, note_b) if n]
@@ -384,7 +384,7 @@ def candidate_reports(candidates):
 
 def partner_list(conn, me, profile, limit=recommend.TOP_N, candidates=None, exclude=()):
     only = None if candidates is None else [(c.puuid, service.riot_id_key(c.riot_id)) for c in candidates]
-    found = recommend.recommend(conn, CachedSource(OwnDataSource(conn)), {**me, "profile": profile}, GAP_TABLE,
+    found = recommend.recommend(conn, stats_source.default_source(conn), {**me, "profile": profile}, GAP_TABLE,
                                 top_n=limit, only=only, reports=candidate_reports(candidates),
                                 exclude={service.riot_id_key(x) if "#" in x else x for x in exclude})
     return [
@@ -409,7 +409,10 @@ def recommend_for(req: RecommendRequest):
 def champions():
     """Champion names seen in Solo/Duo data, for the 自选英雄 picker."""
     with connect() as conn:
-        rows = conn.execute("SELECT DISTINCT champion_name FROM participants ORDER BY champion_name")
+        if stats_source.has_aggregates(conn):
+            rows = conn.execute("SELECT DISTINCT champion_name FROM champion_stats ORDER BY champion_name")
+        else:
+            rows = conn.execute("SELECT DISTINCT champion_name FROM participants ORDER BY champion_name")
         return [r[0] for r in rows]
 
 
@@ -417,10 +420,7 @@ def champions():
 def champion_positions():
     """{champion: positions it is commonly played in, most played first}, for the picker's position tabs."""
     with connect() as conn:
-        rows = conn.execute(
-            """SELECT champion_name, position, COUNT(*) FROM participants
-               WHERE position IN ('TOP', 'JUNGLE', 'MIDDLE', 'BOTTOM', 'UTILITY')
-               GROUP BY champion_name, position ORDER BY champion_name, COUNT(*) DESC""").fetchall()
+        rows = stats_source.champion_position_games(conn, ("TOP", "JUNGLE", "MIDDLE", "BOTTOM", "UTILITY"))
     games, out = {}, {}
     for champ, _, n in rows:
         games[champ] = games.get(champ, 0) + n

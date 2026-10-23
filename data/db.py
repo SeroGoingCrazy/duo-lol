@@ -71,6 +71,16 @@ CREATE TABLE IF NOT EXISTS seed_progress (    -- seed players whose recent games
     puuid TEXT PRIMARY KEY,
     matches_per_player INTEGER NOT NULL       -- how many recent games were requested
 );
+CREATE TABLE IF NOT EXISTS champion_stats (   -- 全服统计 summed by sync_site.py, for a site database without raw matches
+    champion_name TEXT, position TEXT, tier TEXT,  -- tier = the match's seed tier, like OwnDataSource
+    wins INTEGER NOT NULL, games INTEGER NOT NULL,
+    PRIMARY KEY (champion_name, position, tier)
+);
+CREATE TABLE IF NOT EXISTS pair_stats (       -- 英雄组合 on one team, all tiers; (champ_a, pos_a) sorts before (champ_b, pos_b)
+    champ_a TEXT, pos_a TEXT, champ_b TEXT, pos_b TEXT,
+    wins INTEGER NOT NULL, games INTEGER NOT NULL,
+    PRIMARY KEY (champ_a, pos_a, champ_b, pos_b)
+);
 CREATE TABLE IF NOT EXISTS score_scale (      -- 搭配评分 scale (score_scale.py); one row, shared by every API machine
     id INTEGER PRIMARY KEY CHECK (id = 1),
     scale TEXT NOT NULL,                      -- JSON written by score_scale.fit
