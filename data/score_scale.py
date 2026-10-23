@@ -24,7 +24,7 @@ import db
 import player_profile
 import predict
 import recommend
-from stats_source import CachedSource, OwnDataSource
+import stats_source
 
 POSITIONS = ["TOP", "JUNGLE", "MIDDLE", "BOTTOM", "UTILITY"]
 ROLE_PAIRS = len(list(combinations(POSITIONS, 2)))   # 10 ways to put two players in two different positions
@@ -86,7 +86,7 @@ def summarize(rates):
 
 
 def fit(conn, gap_table=None, sample_pairs=SAMPLE_PAIRS, seed=0, max_pairs=MAX_SAMPLE_PAIRS):
-    source = CachedSource(OwnDataSource(conn))
+    source = stats_source.default_source(conn)
     players = []
     for puuid, riot_id, rank, ids in recommend.candidate_pool(conn):
         profile = player_profile.proficiency(conn, puuid, ids)
