@@ -10,7 +10,7 @@ import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
-import { ApiError, ensurePlayer, recentGames, riotIdKey, riotIdProblem, type Player, type RecentGame } from "@/lib/api";
+import { ApiError, ensurePlayer, recentGames, riotIdKey, riotIdProblem, type LookupUpdate, type Player, type RecentGame } from "@/lib/api";
 import { championName } from "@/lib/champions";
 import { useChampionInfo } from "@/lib/useChampionInfo";
 import { cn } from "@/lib/utils";
@@ -21,17 +21,18 @@ export default function PlayerProfile({ riotId }: { riotId: string }) {
   const info = useChampionInfo();
   const router = useRouter();
   const [player, setPlayer] = useState<Player | null>(null);
+  const [progress, setProgress] = useState<LookupUpdate | null>(null);
   const [games, setGames] = useState<RecentGame[]>([]);
   const [error, setError] = useState("");
   const [me, setMe] = useState("");
 
   useEffect(() => {
     let stale = false;
-    setPlayer(null); setGames([]); setError("");   // a client-side move to another player reuses this component
+    setPlayer(null); setProgress(null); setGames([]); setError("");   // a client-side move to another player reuses this component
     (async () => {
       let p: Player;
       try {
-        p = await ensurePlayer(riotId);
+        p = await ensurePlayer(riotId, (update) => { if (!stale) setProgress(update); });
       } catch (e) {
         if (!stale) setError(e instanceof ApiError ? e.message : String(e));
         return;
@@ -52,7 +53,7 @@ export default function PlayerProfile({ riotId }: { riotId: string }) {
     <>
       <h1 className="mb-1 break-all text-2xl font-bold tracking-tight lg:text-3xl" data-testid="player-title">{player?.riot_id ?? riotId}</h1>
       <p className="mb-5 text-sm text-muted-foreground">{t("美服 · 单双排")}</p>
-      {!player && !error && <LookupProgress label={t("正在读取 {id} 本赛季的单双排对局…", { id: riotId })} hint={t("第一次查询大约需要 2 分钟，之后会缓存。")} />}
+      {!player && !error && <LookupProgress label={t("正在查询 {id}…", { id: riotId })} progress={progress} hint={t("第一次查询大约需要 2 分钟，之后会缓存。")} />}
       {error && <Alert variant="error">{t.api(error)}</Alert>}
       {player && (
         <div className="grid gap-4 xl:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] xl:items-start">

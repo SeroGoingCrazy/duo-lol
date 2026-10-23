@@ -8,7 +8,7 @@ A teammate finder for League of Legends players on NA. Check how two players fit
 
 ## What's on the site
 
-- **Duo check (`/`)**: enter two Riot IDs to see a 0–100 duo score, the predicted win rate, suggested roles and recommended champion pairs. Copy a link to share the result.
+- **Home and duo check (`/`)**: a product introduction with paths to the swipe demo and a free two-player check. Enter two Riot IDs to see a 0–100 duo score, the predicted win rate, suggested roles and recommended champion pairs. Cold lookups show player identity and rank first, then actual match-loading progress. Copy a link to share the result.
 - **Find a duo (`/find`)**: a swipe deck ranked by predicted win rate. Each card flips through duo score, champion pairs and reasons; swipe, drag or use the arrow keys to like or pass, and undo your last pass. Visitors get a browser-local demo with simulated likes. Logged-in members who link a Riot ID and turn on “Recommend me” swipe real members.
 - **Matches**: Riot IDs stay hidden on cards until both members like each other. Matches and “likes you” show next to the deck, with optional Discord DM notifications. Members can block or report, and admins review reports at `/admin`.
 - **Player pages (`/player/Name-NA1`)**: rank, most played champions and recent ranked games, with a shortcut to check your duo with that player. Players with fewer than 20 ranked games can pick their champions and roles by hand.
@@ -115,7 +115,9 @@ web/drizzle/       Application database migrations
 docs/adr/          Architecture and product decisions
 ```
 
-Run backend checks with `uv run pytest` and frontend type checks with `cd web && npm run typecheck`. The Playwright suite (`npm run test:e2e` from `web/`) starts isolated services with synthetic data; its server commands currently require a POSIX-compatible environment.
+Run backend checks with `uv run pytest` and frontend type checks with `cd web && npm run typecheck`. The Playwright suite (`npm run test:e2e` from `web/`) starts isolated services with synthetic data on Windows and POSIX systems. Windows can use the existing uv-synced `.venv`; set `PW_CHANNEL=msedge` to use installed Edge instead of Playwright Chromium. Test databases live in a new temporary directory for each run.
+
+Anonymous first-party funnel milestones and example analysis queries are documented in [analytics](docs/analytics.md). Demo activity is counted separately from real member activity.
 
 For more context, see the [product specification](docs/PRD-v2.md), [project terminology](CONTEXT.md), and [deployment guide](docs/deploy.md).
 

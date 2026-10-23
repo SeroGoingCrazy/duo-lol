@@ -5,6 +5,14 @@ import { boolean, index, integer, jsonb, pgSchema, primaryKey, serial, text, tim
 
 export const app = pgSchema("app");
 
+/** Anonymous funnel milestones, once per tab session/event/mode. No member or player linkage. */
+export const funnelEvents = app.table("funnel_events", {
+  session: text("session").notNull(),
+  event: text("event").notNull(),
+  mode: text("mode").notNull(),
+  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+}, (t) => [primaryKey({ columns: [t.session, t.event, t.mode] }), index("funnel_events_created_idx").on(t.createdAt)]);
+
 /** 会员. Also Auth.js's users table: name is the Discord username, shown after 互选 if show_discord. */
 export const members = app.table("members", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),

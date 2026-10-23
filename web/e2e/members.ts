@@ -30,7 +30,7 @@ export async function setOptIn(page: Page, on: boolean) {
   await page.goto("/account");
   const prefs = page.getByTestId("prefs");
   await prefs.getByLabel(/同意被推荐/).setChecked(on);
-  await prefs.getByRole("button", { name: "保存" }).click();
+  await prefs.getByRole("button", { name: "保存", exact: true }).click();
   await expect(prefs.getByText("已保存")).toBeVisible();
 }
 

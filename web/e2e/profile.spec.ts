@@ -10,7 +10,7 @@ async function savePrefs(page: Page, { bio, languages = [], voice }: { bio: stri
   await prefs.getByLabel(/简介/).fill(bio);
   for (const l of languages) await prefs.getByText(l, { exact: true }).click();
   if (voice) await prefs.getByText(voice, { exact: true }).click();
-  await prefs.getByRole("button", { name: "保存" }).click();
+  await prefs.getByRole("button", { name: "保存", exact: true }).click();
   await expect(prefs.getByText("已保存")).toBeVisible();
 }
 
@@ -25,7 +25,7 @@ test("简介 and tags show on the card, contact details are refused, filters and
   // a 简介 can't carry a way to reach someone before 互选
   await jade.goto("/account");
   await jade.getByTestId("prefs").getByLabel(/简介/).fill("add me on discord: jade123");
-  await jade.getByTestId("prefs").getByRole("button", { name: "保存" }).click();
+  await jade.getByTestId("prefs").getByRole("button", { name: "保存", exact: true }).click();
   await expect(jade.getByTestId("prefs")).toContainText("简介里不能写联系方式");
   await savePrefs(jade, { bio: "主玩辅助，晚上打", languages: ["한국어"], voice: "开麦" });
   await savePrefs(uma, { bio: "Chill jungler", languages: ["English"] });

@@ -7,7 +7,8 @@ import RiotIdField from "@/components/RiotIdField";
 import SelfReportForm from "@/components/SelfReportForm";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { ApiError, ensurePlayer, findPartners, listChampions, riotIdProblem, type DeckCard, type Partner, type Player, type SelfReport } from "@/lib/api";
+import { ApiError, ensurePlayer, findPartners, listChampions, riotIdProblem, type DeckCard, type LookupUpdate, type Partner, type Player, type SelfReport } from "@/lib/api";
+import { trackFunnel } from "@/lib/analytics";
 import { cardKey, DECK_SIZE, likesYou, loadSwipes, saveSwipes, type Swipe, type SwipeLog } from "@/lib/deck";
 import { useChampionInfo } from "@/lib/useChampionInfo";
 import { useT } from "@/components/LangProvider";
@@ -21,6 +22,7 @@ export default function DemoDeck({ notice }: { notice: React.ReactNode }) {
   const [me, setMe] = useState("");
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState("");
+  const [progress, setProgress] = useState<LookupUpdate | null>(null);
   const [error, setError] = useState("");
   const [player, setPlayer] = useState<Player | null>(null);   // set while 数据不足 waits for 自选英雄
   const [deckOwner, setDeckOwner] = useState("");             // whose 牌堆 is showing
@@ -51,6 +53,8 @@ export default function DemoDeck({ notice }: { notice: React.ReactNode }) {
 
   async function swiped(c: DeckCard, s: Swipe) {
     update({ swipes: { ...log.swipes, [c.id]: s }, lastPass: s === "pass" ? c.id : null });
+    trackFunnel("first_swipe", "demo");
+    if (s === "like" && likesYou(c)) trackFunnel("mutual_like", "demo");
     return s === "like" && likesYou(c) ? c : null;
   }
 
@@ -76,6 +80,7 @@ export default function DemoDeck({ notice }: { notice: React.ReactNode }) {
       setLog(loadSwipes(p.riot_id));
       setRound((r) => r + 1);
       setPartners(out.partners); setNotes(out.notes);
+      trackFunnel("deck_loaded", "demo");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : String(err));
     } finally {
@@ -84,13 +89,13 @@ export default function DemoDeck({ notice }: { notice: React.ReactNode }) {
   }
 
   async function search(id: string) {
-    setError(""); setPartners(null); setPlayer(null); setNotes([]); setBusy(true);
+    setError(""); setPartners(null); setPlayer(null); setNotes([]); setBusy(true); setProgress(null);
     const url = new URL(window.location.href);
     url.searchParams.set("me", id.trim());
     window.history.replaceState(null, "", url);
     try {
-      setLoading(t("正在读取 {id} 本赛季的单双排对局…", { id: id.trim() }));
-      const p = await ensurePlayer(id.trim());
+      setLoading(t("正在查询 {id}…", { id: id.trim() }));
+      const p = await ensurePlayer(id.trim(), setProgress);
       setLoading(""); setBusy(false);
       if (p.insufficient_data) setPlayer(p);   // ask for 自选英雄 first
       else await recommend(p);
@@ -102,19 +107,22 @@ export default function DemoDeck({ notice }: { notice: React.ReactNode }) {
 
   return (
     <div className="mx-auto max-w-6xl">
-      <div className={`${partners ? "mb-3 sm:mb-6" : "mb-6"} flex flex-wrap items-end justify-between gap-4`}>
+      <div className={`${partners ? "mb-2 sm:mb-6" : "mb-6"} flex flex-wrap items-end justify-between gap-2`}>
         <div>
           <div className={`${partners ? "hidden sm:flex" : "flex"} mb-2 items-center gap-1.5 text-xs font-medium text-primary`}><Sparkles className="size-3.5" />{t("找到合拍的下一局")}</div>
-          <h1 className="text-3xl font-bold tracking-tight">{t("找搭子")}</h1>
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{t("找搭子")}</h1>
           <p className={`${partners ? "hidden sm:block" : ""} mt-2 text-sm text-muted-foreground`}>{t("看看搭配，选个队友。右滑喜欢，左滑跳过。")}</p>
         </div>
         {partners && <span className="rounded-full border bg-card px-3 py-1.5 text-xs text-muted-foreground">{t("美服 · 单双排")} <span className="mx-1 text-border">/</span> {t("演示版")}</span>}
       </div>
 
-      {/* once the deck is up, phones keep the card in view; the footnote below still says it is a demo */}
+      {/* The full onboarding notice collapses once loaded; the simulation warning stays in view. */}
       <Alert className={`${partners ? "hidden sm:flex" : ""} mb-3 sm:mb-6`} data-testid="demo-notice">{notice}</Alert>
+      {partners && <p className="mb-2 rounded-lg border border-primary/25 bg-primary/5 px-3 py-1.5 text-xs font-medium" data-testid="demo-simulation-notice">
+        {t.lang === "zh" ? "演示：喜欢和互选均为模拟，不会通知对方。" : "Demo: likes and matches are simulated. Nobody is notified."}
+      </p>}
 
-      <details open={partners ? undefined : true} className="mb-3 rounded-2xl border bg-card p-4 sm:mb-6" key={partners ? "loaded" : "search"}>
+      <details open={partners ? undefined : true} className="mb-2 rounded-2xl border bg-card px-3 py-2 sm:mb-6 sm:p-4" key={partners ? "loaded" : "search"}>
         <summary className="cursor-pointer text-sm font-medium">{partners ? <><span className="text-muted-foreground">{t("当前玩家")}</span> <span className="mx-2">{deckOwner}</span><span className="text-xs text-primary">{t("更换玩家")}</span></> : t("从你的 Riot ID 开始")}</summary>
         <form className="mt-3 flex flex-wrap items-start gap-3" onSubmit={(e) => { e.preventDefault(); if (ready && !busy) search(me); }}>
           <RiotIdField label={t("你的 Riot ID")} placeholder="Name#NA1" value={me} onChange={setMe} />
@@ -123,14 +131,14 @@ export default function DemoDeck({ notice }: { notice: React.ReactNode }) {
       </details>
 
       <div className="space-y-3">
-        {loading && <LookupProgress label={loading} hint={loading !== t("正在从推荐池里准备你的牌堆…") ? t("第一次查询的玩家大约需要 2 分钟，之后会缓存。") : undefined} />}
+        {loading && <LookupProgress label={loading} progress={loading !== t("正在从推荐池里准备你的牌堆…") ? progress : undefined} hint={loading !== t("正在从推荐池里准备你的牌堆…") ? t("第一次查询的玩家大约需要 2 分钟，之后会缓存。") : undefined} />}
         {error && <Alert variant="error">{t.api(error)}</Alert>}
         {player && <SelfReportForm className="max-w-3xl" player={player} champions={champions} onSubmit={(r) => recommend(player, r)} />}
         {partners && partners.length === 0 && <Alert>{t("推荐池里暂时没有能和你一起排的玩家。")}</Alert>}
       </div>
 
       {partners && partners.length > 0 && (
-        <DeckStage key={round} remaining={remaining} total={partners.length} mutual={mutual} likes={likes} info={info}
+        <DeckStage key={round} demo remaining={remaining} total={partners.length} mutual={mutual} likes={likes} info={info}
           canUndo={!!log.lastPass} onSwipe={swiped} onUndo={undo}
           empty={<>
             <p className="font-semibold">{t("暂时没有更多搭子了")}</p>

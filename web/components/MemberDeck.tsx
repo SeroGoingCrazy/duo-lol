@@ -10,8 +10,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
 import {
   ApiError, blockMember, cancelMutualLike, ensurePlayer, getDeck, listChampions, postSwipe, reportMember, saveSelfReport,
-  saveDeckFilter, setLooking, undoSwipe, type Deck, type DeckCard, type Player,
+  saveDeckFilter, setLooking, undoSwipe, type Deck, type DeckCard, type LookupUpdate, type Player,
 } from "@/lib/api";
+import { trackFunnel } from "@/lib/analytics";
 import { isFiltered, LOOKING_HOURS, type DeckFilter } from "@/lib/profile";
 import type { Swipe } from "@/lib/deck";
 import { REPORT_REASONS } from "@/lib/reportReasons";
@@ -27,6 +28,7 @@ export default function MemberDeck({ riotId }: { riotId: string }) {
   const t = useT();
   // what is loading, kept as data so the label follows a language switch: the deck, or a Riot ID's lookup
   const [loading, setLoading] = useState<{ riotId?: string } | null>(null);
+  const [progress, setProgress] = useState<LookupUpdate | null>(null);
   const [error, setError] = useState("");
   const [needPicks, setNeedPicks] = useState<Player | null>(null);
   const [champions, setChampions] = useState<string[]>([]);
@@ -54,6 +56,7 @@ export default function MemberDeck({ riotId }: { riotId: string }) {
       setCards(d.cards); setTotal(d.cards.length); setLikers(new Set(d.likes_you)); setMutual(d.mutual);
       setLikesLeft(d.likes_remaining); setCanUndo(d.can_undo); setNeedPicks(null); setError("");
       setFilter(d.filter); setLookingUntil(d.looking_until ? new Date(d.looking_until) : null);
+      trackFunnel("deck_loaded", "member");
       const b = backoff.current;
       if (b.timer) clearTimeout(b.timer);
       if (d.cards.length === 0 && d.retry_after) {
@@ -74,8 +77,8 @@ export default function MemberDeck({ riotId }: { riotId: string }) {
     listChampions().then(setChampions).catch(() => setChampions([]));
     (async () => {
       try {
-        setLoading({ riotId });
-        me.current = await ensurePlayer(riotId);
+        setLoading({ riotId }); setProgress(null);
+        me.current = await ensurePlayer(riotId, setProgress);
         await load();
       } catch (e) {
         setError(e instanceof ApiError ? e.message : String(e));
@@ -100,7 +103,9 @@ export default function MemberDeck({ riotId }: { riotId: string }) {
       setLikesLeft(r.likes_remaining);
       setCanUndo(s === "pass");
       setError("");
+      trackFunnel("first_swipe", "member");
       if (!r.match) return null;
+      trackFunnel("mutual_like", "member");
       const matched = { ...c, ...r.match };
       setMutual((ms) => [matched, ...ms]);
       setLikers((l) => { const n = new Set(l); n.delete(c.id); return n; });
@@ -164,13 +169,13 @@ export default function MemberDeck({ riotId }: { riotId: string }) {
 
   return (
     <div className="mx-auto max-w-6xl">
-      <div className="mb-3 flex flex-wrap items-end justify-between gap-4 sm:mb-6">
+      <div className="mb-2 flex flex-wrap items-end justify-between gap-2 sm:mb-6 sm:gap-4">
         <div>
           <div className="mb-2 hidden items-center gap-1.5 text-xs font-medium text-primary sm:flex"><Sparkles className="size-3.5" />{t("找到合拍的下一局")}</div>
-          <h1 className="text-3xl font-bold tracking-tight">{t("找搭子")}</h1>
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{t("找搭子")}</h1>
           <p className="mt-2 hidden text-sm text-muted-foreground sm:block">{t("推荐池里都是同意被推荐的会员。右滑喜欢，左滑跳过，互相喜欢后才能看到对方的 Riot ID。")}</p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="contents sm:flex sm:flex-wrap sm:items-center sm:gap-2">
           {filter && (
             <Button variant={looking ? "default" : "outline"} className={looking ? "h-8 gap-2 rounded-full bg-good bg-none px-3 text-xs text-good-foreground shadow-none hover:bg-good/90" : "h-8 gap-2 rounded-full px-3 text-xs"}
               aria-pressed={looking} onClick={toggleLooking} data-testid="looking-toggle"
@@ -178,7 +183,7 @@ export default function MemberDeck({ riotId }: { riotId: string }) {
               <span className={looking ? "size-2 rounded-full bg-good-foreground" : "size-2 rounded-full bg-muted-foreground/50"} />{t("现在想打")}
             </Button>
           )}
-          <span className="rounded-full border bg-card px-3 py-1.5 text-xs text-muted-foreground" data-testid="deck-owner">
+          <span className="w-full rounded-full border bg-card px-3 py-1 text-xs text-muted-foreground sm:w-auto sm:py-1.5" data-testid="deck-owner">
             {riotId}{likesLeft != null && <><span className="mx-1 text-border">/</span>{t("今天还能喜欢 {n} 次", { n: likesLeft })}</>}
           </span>
         </div>
@@ -186,7 +191,7 @@ export default function MemberDeck({ riotId }: { riotId: string }) {
 
       <div className="space-y-3">
         {loading && (loading.riotId
-          ? <LookupProgress label={t("正在读取 {id} 本赛季的单双排对局…", { id: loading.riotId })} hint={t("第一次查询大约需要 2 分钟，之后会缓存。")} />
+          ? <LookupProgress label={t("正在查询 {id}…", { id: loading.riotId })} progress={progress} hint={t("第一次查询大约需要 2 分钟，之后会缓存。")} />
           : <LookupProgress label={t("正在从推荐池里准备你的牌堆…")} />)}
         {filter && <DeckFilters filter={filter} onChange={changeFilter} />}
         {error && <Alert variant="error">{t.api(error)}</Alert>}

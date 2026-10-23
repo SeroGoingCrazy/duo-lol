@@ -30,6 +30,11 @@ test("navigate from the deck to 查组合, predict, reload and return", async ({
   await expect(page.getByTestId("player-card")).toHaveCount(2);
   await page.reload();
   await expect(page.getByTestId("pair-result")).toBeVisible();
+  // Returning home clears the previous check and restores the landing page.
+  await page.getByRole("link", { name: "匹配搭子", exact: true }).click();
+  await expect(page.getByTestId("home-hero")).toBeVisible();
+  await expect(page.getByLabel("玩家 A")).toHaveValue("");
+  await expect(page.getByTestId("pair-result")).toHaveCount(0);
   await page.getByRole("link", { name: "找搭子", exact: true }).click();
   await expect(page.getByLabel("你的 Riot ID")).toBeVisible();
   expect(pageErrors).toEqual([]);

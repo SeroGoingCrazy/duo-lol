@@ -1,5 +1,10 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import HomeHero from "@/components/HomeHero";
+import FunnelEvent from "@/components/FunnelEvent";
+import PlayerCard from "@/components/PlayerCard";
+import { useChampionInfo } from "@/lib/useChampionInfo";
+import { trackFunnel } from "@/lib/analytics";
 import LookupProgress from "@/components/LookupProgress";
 import PairResultView from "@/components/PairResultView";
 import RiotIdField from "@/components/RiotIdField";
@@ -10,15 +15,19 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
   ApiError, ensurePlayer, listChampions, predictPair, riotIdKey, riotIdProblem,
-  type PairResult, type Player, type SelfReport,
+  type PairResult, type Player, type SelfReport, type LookupUpdate,
 } from "@/lib/api";
 
 export default function PairPage() {
   const t = useT();
+  const info = useChampionInfo();
   const [a, setA] = useState("");
   const [b, setB] = useState("");
   const [busy, setBusy] = useState(false);
   const [loadingId, setLoadingId] = useState<string | null>(null);   // player being read
+  const [progress, setProgress] = useState<LookupUpdate | null>(null);
+  const [loadedPlayers, setLoadedPlayers] = useState<Player[]>([]);
+  const [showHero, setShowHero] = useState(true);
   const [error, setError] = useState("");
   const [result, setResult] = useState<PairResult | null>(null);
   const [players, setPlayers] = useState<[Player, Player] | null>(null);
@@ -38,7 +47,7 @@ export default function PairPage() {
     started.current = true;
     const q = new URLSearchParams(window.location.search);
     const qa = q.get("a"), qb = q.get("b");
-    if (qa && qb) { setA(qa); setB(qb); load(qa, qb); }
+    if (qa && qb) { setShowHero(false); setA(qa); setB(qb); load(qa, qb); }
   }, []);
 
   // Once both players are loaded, predict as soon as everyone 数据不足 has 自选英雄.
@@ -49,13 +58,15 @@ export default function PairPage() {
     let stale = false;   // a newer submit replaces players; ignore this answer then
     setBusy(true);
     predictPair(pa.riot_id, pb.riot_id, reports.a, reports.b)
-      .then((r) => { if (!stale) setResult(r); })
+      .then((r) => { if (!stale) { setResult(r); trackFunnel("pair_completed", "public"); } })
       .catch((e) => { if (!stale) setError(e instanceof ApiError ? e.message : String(e)); })
       .finally(() => { if (!stale) setBusy(false); });
     return () => { stale = true; };
   }, [players, reports]);
 
   async function load(idA: string, idB: string) {
+    setShowHero(false); setProgress(null); setLoadedPlayers([]);
+    trackFunnel("pair_started", "public");
     setError(""); setResult(null); setPlayers(null); setReports({}); setDrafts({}); setBusy(true);
     const url = new URL(window.location.href);
     url.searchParams.set("a", idA.trim()); url.searchParams.set("b", idB.trim());
@@ -63,8 +74,10 @@ export default function PairPage() {
     try {
       const loaded: Player[] = [];
       for (const id of [idA, idB]) {
+        setProgress(null);
         setLoadingId(id.trim());
-        loaded.push(await ensurePlayer(id.trim()));
+        loaded.push(await ensurePlayer(id.trim(), setProgress));
+        setLoadedPlayers([...loaded]);
       }
       setPlayers([loaded[0], loaded[1]]);
     } catch (err) {
@@ -77,23 +90,29 @@ export default function PairPage() {
 
   const needs = players ? (["a", "b"] as const).filter((k, i) => players[i].insufficient_data) : [];
   const pending = needs.filter((k) => !reports[k]);
+  const CheckHeading = showHero ? "h2" : "h1";
 
   return (
     <>
-      <h1 className="mb-1 text-2xl font-bold tracking-tight lg:text-3xl">{t("查组合")}</h1>
+      <FunnelEvent event="home_viewed" mode="public" />
+      {showHero && <HomeHero />}
+      <section id="duo-check" className="scroll-mt-6" aria-labelledby="duo-check-title">
+      <CheckHeading id="duo-check-title" className="mb-1 text-2xl font-bold tracking-tight lg:text-3xl">{t("查组合")}</CheckHeading>
       <p className="mb-5 text-sm text-muted-foreground">{t("输入两个美服 Riot ID，看你们一起打单双排的搭配评分和最佳英雄组合。")}</p>
 
       <Card className="mb-4">
-        <form className="flex flex-wrap items-start gap-3" onSubmit={(e) => { e.preventDefault(); if (ready) load(a, b); }}>
+        <form className="flex flex-wrap items-start gap-3" onSubmit={(e) => { e.preventDefault(); if (ready && !busy) load(a, b); }}>
           <RiotIdField label={t("玩家 A")} placeholder="Name#NA1" value={a} onChange={setA} />
           <RiotIdField label={t("玩家 B")} placeholder="Name#NA1" value={b} onChange={setB}
             error={same ? t("两个 Riot ID 是同一个人，请填另一位玩家") : null} />
           <Button className="mt-5 w-full sm:w-auto" disabled={busy || !ready}>{t("预测")}</Button>
         </form>
       </Card>
+      </section>
 
       <div className="flex flex-col gap-4">
-        {loadingId && <LookupProgress label={t("正在读取 {id} 本赛季的单双排对局…", { id: loadingId })} hint={t("第一次查询的玩家大约需要 2 分钟，之后会缓存。")} />}
+        {loadingId && <LookupProgress label={t("正在查询 {id}…", { id: loadingId })} hint={t("第一次查询的玩家大约需要 2 分钟，之后会缓存。")} progress={progress} />}
+        {!result && loadedPlayers.length > 0 && <div className="grid gap-3 sm:grid-cols-2" data-testid="loaded-player-previews">{loadedPlayers.map((player) => <PlayerCard key={player.riot_id} player={player} info={info} />)}</div>}
         {!loadingId && busy && <LookupProgress label={t("正在计算搭配评分…")} />}
         {error && <Alert variant="error">{t.api(error)}</Alert>}
 

@@ -117,7 +117,7 @@ test("找搭子: swipe deck, pages, undo and 互选", async ({ page }) => {
   const card = page.getByTestId("swipe-card");
   await expect(card).toBeVisible({ timeout: 45_000 });
 
-  // page 1: score and positions; the Riot ID stays hidden until 互选
+  // page 1: score and positions; demo never implies the player agreed to contact
   await expect(card.getByTestId("score")).toBeVisible();
   await expect(card.getByTestId("card-roles").locator("[data-position]")).toHaveCount(2);
   await expect(card).not.toContainText("#");
@@ -137,25 +137,25 @@ test("找搭子: swipe deck, pages, undo and 互选", async ({ page }) => {
   await page.getByRole("button", { name: "撤销上一次跳过" }).click();
   await expect(card.locator(".win-rate")).toHaveText(`${first.toFixed(1)}%`);
 
-  // 喜欢 someone from 喜欢我的人: that is a 互选, which reveals the Riot ID
-  await page.getByRole("tab", { name: /喜欢我的人/ }).click();
+  // Demo likes and mutuals are clearly simulated and never expose contact actions.
+  await page.getByRole("tab", { name: /模拟喜欢/ }).click();
   const likes = page.getByTestId("likes-list").locator("li");
   await expect(likes.first()).toBeVisible();
   await likes.first().click();
-  await expect(card.getByText("喜欢了你")).toBeVisible();
+  await expect(card.getByText("模拟喜欢")).toBeVisible();
   await page.getByRole("button", { name: "喜欢", exact: true }).click();
   const dialog = page.getByTestId("match-dialog");
   await expect(dialog).toBeVisible();
-  const riotId = await dialog.getByTestId("match-riot-id").innerText();
-  expect(riotId).toContain("#");
+  await expect(dialog).toContainText("模拟互选");
+  await expect(dialog.getByTestId("match-riot-id")).toHaveCount(0);
   await dialog.getByRole("button", { name: "继续滑" }).click();
   await page.getByRole("tab", { name: /互选/ }).click();
-  await expect(page.getByTestId("mutual-list")).toContainText(riotId);
+  await expect(page.getByTestId("mutual-list")).toContainText("演示候选");
 
   // swipes are kept in this browser: a reload shows the same 互选
   await page.reload();
   await expect(card).toBeVisible({ timeout: 45_000 });
-  await expect(page.getByTestId("mutual-list")).toContainText(riotId);
+  await expect(page.getByTestId("mutual-list")).toContainText("演示候选");
 });
 
 test("找搭子: insufficient data asks for self-reported champions", async ({ page }) => {

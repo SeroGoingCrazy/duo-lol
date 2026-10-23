@@ -25,18 +25,18 @@ export default function Nav({ member }: { member: { name: string; admin?: boolea
     return () => { live = false; clearInterval(timer); };
   }, [member?.name, path]);   // eslint-disable-line react-hooks/exhaustive-deps
   const item = (href: string, label: string, badge = 0) => (
-    <Link href={href} aria-current={path === href ? "page" : undefined}
+    <Link href={href} aria-current={path === href.split("#")[0] ? "page" : undefined}
       className={cn("rounded-full px-3 py-1.5 text-sm no-underline transition-colors",
-        path === href ? "bg-linear-to-r from-neon-a/25 to-neon-b/20 font-semibold text-foreground" : "text-muted-foreground hover:text-foreground")}>
+        path === href.split("#")[0] ? "bg-linear-to-r from-neon-a/25 to-neon-b/20 font-semibold text-foreground" : "text-muted-foreground hover:text-foreground")}>
       {label}
       {badge > 0 && <span className="ml-1.5 rounded-full bg-good px-1.5 py-0.5 text-[11px] font-semibold text-good-foreground" data-testid="unseen-badge"
         aria-label={t("{n} 条新的互选或喜欢", { n: badge })}>{badge > 99 ? "99+" : badge}</span>}
     </Link>
   );
   return (
-    <nav className="mb-6 flex flex-wrap items-center gap-1">
-      <span className="text-neon mr-3 font-black italic tracking-tight">{t("匹配搭子")}</span>
-      {item("/", t("查组合"))}
+    <nav className={cn("flex flex-wrap items-center gap-1", path === "/find" ? "mb-3 sm:mb-6" : "mb-6")}>
+      <a href="/" className="text-neon mr-3 font-black italic tracking-tight no-underline">{t("匹配搭子")}</a>
+      {item("/#duo-check", t("查组合"))}
       {item("/find", t("找搭子"), path === "/find" ? 0 : unseen)}
       <div className="ml-auto flex items-center gap-1">
         {/* both languages always visible, the current one highlighted */}

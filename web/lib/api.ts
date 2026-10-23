@@ -15,6 +15,24 @@ export type Player = {
   champions: ChampionStat[];
 };
 
+/** Riot identity is available before rank; neither is inferred from partial match history. */
+export type PlayerPreview = {
+  riot_id: string;
+  tier?: string | null;
+  division?: string | null;
+  league_points?: number | null;
+  unranked?: boolean;
+};
+export type LookupUpdate = {
+  status: "running" | "done" | "error";
+  stage: "account" | "rank" | "history" | "matches" | "analysis" | "done";
+  done: number;
+  total: number;
+  preview?: PlayerPreview;
+  player?: Player;
+  error?: string;
+};
+
 export type ChampionPair = {
   champion_a: string;
   champion_b: string;
@@ -46,6 +64,8 @@ export type Partner = {
   roles: { a: string; b: string };
   top_pairs: ChampionPair[];
   reasons: string[];
+  games?: number;
+  champions?: ChampionStat[];
 };
 
 export type Pick = { champion: string; position: string };
@@ -80,14 +100,19 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** A cached player comes back at once; otherwise the lookup runs as a job we poll until done. */
-export async function ensurePlayer(riotId: string): Promise<Player> {
+export async function ensurePlayer(riotId: string, onProgress?: (update: LookupUpdate) => void): Promise<Player> {
+  onProgress?.({ status: "running", stage: "account", done: 0, total: 0 });
   const started = await call<{ job_id: string | null; player?: Player }>("/api/lookups", {
     method: "POST",
     body: JSON.stringify({ riot_id: riotId }),
   });
-  if (started.player) return started.player;
+  if (started.player) {
+    onProgress?.({ status: "done", stage: "done", done: 0, total: 0, player: started.player, preview: started.player });
+    return started.player;
+  }
   for (;;) {
-    const job = await call<{ status: string; error?: string; player?: Player }>(`/api/lookups/${started.job_id}`);
+    const job = await call<LookupUpdate>(`/api/lookups/${started.job_id}`, { cache: "no-store" });
+    onProgress?.(job);
     if (job.status === "done" && job.player) return job.player;
     if (job.status === "error") throw new ApiError(500, job.error ?? "查询失败，请稍后再试");
     await sleep(700);
@@ -168,7 +193,7 @@ export function riotIdProblem(id: string): string | null {
 export type DuoRecord = { games: number; wins: number; last_played: number | null };
 export type DeckCard = Omit<Partner, "riot_id"> & {
   id: string; riot_id?: string; discord?: string | null; profile?: MemberProfile; duo_record?: DuoRecord | null;
-  /** after 互选: their 头像 image and whether Riot proved the Riot ID is theirs (ADR-0011) */
+  /** 头像 can appear before 互选; Riot ID and contact details remain hidden until 互选 (ADR-0011). */
   avatar?: string | null; riot_verified?: boolean;
 };
 

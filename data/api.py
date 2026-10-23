@@ -219,17 +219,24 @@ def start_lookup(req: LookupRequest):
         if running:   # a second tab or double submit joins the lookup already in flight
             return {"job_id": running}
         job_id = uuid.uuid4().hex
-        jobs[job_id] = {"status": "running", "done": 0, "total": 0, "riot_id": req.riot_id, "key": key}
+        jobs[job_id] = {"status": "running", "stage": "account", "done": 0, "total": 0,
+                        "riot_id": req.riot_id, "key": key}
 
     def progress(done, total):
         with jobs_lock:
             jobs[job_id].update(done=done, total=total)
 
+    def stage(name, preview=None):
+        with jobs_lock:
+            jobs[job_id]["stage"] = name
+            if preview is not None:
+                jobs[job_id]["preview"] = preview
+
     def run():
         conn = db.connect(DB_PATH)
         try:
-            player = service.lookup_player(conn, riot_client(), req.riot_id, progress)
-            result = {"status": "done", "player": player_summary(player)}
+            player = service.lookup_player(conn, riot_client(), req.riot_id, progress, on_stage=stage)
+            result = {"status": "done", "stage": "done", "player": player_summary(player)}
         except service.PlayerNotFound as e:
             result = {"status": "error", "error": str(e)}
         except Exception as e:  # surfaced to the page; the key itself never appears in messages
@@ -247,6 +254,8 @@ def start_lookup(req: LookupRequest):
 def lookup_status(job_id: str):
     with jobs_lock:
         job = jobs.get(job_id)
+        if job is not None:
+            job = dict(job)   # serialize a coherent snapshot while the worker keeps advancing
     if not job:
         raise HTTPException(404, "unknown job")
     return job
@@ -391,7 +400,7 @@ def partner_list(conn, me, profile, limit=recommend.TOP_N, candidates=None, excl
         {"puuid": r["puuid"], "riot_id": r["riot_id"], "tier": r["tier"], "division": r["division"], "win_rate": r["win_rate"],
          "win_rate_delta": r["win_rate_delta"], **score_fields(r),
          "roles": r["roles"], "top_pairs": [top_pair_summary(p) for p in r["top_pairs"]],
-         "reasons": r["reasons"]}
+         "reasons": r["reasons"], "games": r["games"], "champions": r["champions"]}
         for r in found
     ]
 

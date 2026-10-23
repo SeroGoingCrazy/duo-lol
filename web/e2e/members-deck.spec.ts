@@ -15,6 +15,18 @@ test("会员 滑卡: 喜欢 back makes a 互选, only then the Riot ID shows", a
   await expect(alice.getByTestId("deck-owner")).toContainText("Alice#NA1");
   await expect(remaining(alice)).toHaveText("剩余 1 / 1", { timeout: 30_000 });
   await expect(alice.getByTestId("deck")).not.toContainText("Dave#NA1");   // hidden before 互选
+  const firstCard = alice.getByTestId("swipe-card");
+  await expect(firstCard.getByTestId("avatar")).toBeVisible();
+  await expect(firstCard.getByTestId("card-games")).toContainText(/\d+ 场单双排/);
+  for (const [width, height] of [[375, 667], [390, 844]]) {
+    await alice.setViewportSize({ width, height });
+    await alice.evaluate(() => window.scrollTo(0, 0));
+    await expect(firstCard).toBeInViewport({ ratio: 1 });
+    await expect(alice.getByRole("button", { name: "喜欢", exact: true })).toBeInViewport({ ratio: 1 });
+    await expect(alice.getByRole("button", { name: "跳过", exact: true })).toBeInViewport({ ratio: 1 });
+    await alice.screenshot({ path: `test-results/member-mobile-${width}x${height}.png`, fullPage: true });
+  }
+  await alice.setViewportSize({ width: 1280, height: 900 });
   await alice.getByRole("button", { name: "喜欢", exact: true }).click();
   await expect(alice.getByTestId("deck-empty")).toBeVisible();
   await expect(alice.getByTestId("match-dialog")).toHaveCount(0);
@@ -53,7 +65,7 @@ test("会员 滑卡: 撤销, 关闭同意被推荐, 举报 and the admin queue",
   await unbound.goto("/find");
   await expect(unbound.getByTestId("demo-notice")).toContainText("绑定 Riot 账号");
 
-  // the demo shows Riot IDs on its cards, so it never deals 会员
+  // the public demo must never deal 会员 or expose their identities through its response
   const demo = await (await unbound.request.post("/api/recommendations", { data: { riot_id: "Ivan#NA1", limit: 200 } })).json();
   expect(demo.partners.length).toBeGreaterThan(0);
   for (const p of demo.partners) expect(["Alice#NA1", "Dave#NA1", "Victor#NA1"]).not.toContain(p.riot_id);

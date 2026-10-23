@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ArrowRight, HeartHandshake, ShieldCheck, Sparkles } from "lucide-react";
+import { ArrowRight } from "lucide-react";
+import FunnelEvent from "@/components/FunnelEvent";
 import { auth } from "@/auth";
 import { signInWithDiscord } from "@/app/authActions";
 import { Alert } from "@/components/ui/alert";
@@ -13,11 +14,6 @@ import { getT } from "@/lib/lang";
 export async function generateMetadata(): Promise<Metadata> {
   return { title: (await getT())("登录") };
 }
-
-// Arcane's cast, from the vendored champion portraits
-const CAST = ["Jinx", "Vi", "Ekko", "Caitlyn", "Jayce", "Viktor", "Mel"];
-// a stronger pool of the Arcane neons behind the hero than the site background has
-const GLOW = "radial-gradient(40rem 24rem at 10% 20%, color-mix(in srgb, var(--neon-a) 16%, transparent), transparent 70%), radial-gradient(36rem 22rem at 90% 80%, color-mix(in srgb, var(--neon-b) 14%, transparent), transparent 70%)";
 
 function DiscordLogo() {
   return (
@@ -31,51 +27,13 @@ export default async function LoginPage() {
   if ((await auth())?.user) redirect("/account");
   const discord = !!process.env.AUTH_DISCORD_ID;
   const t = await getT();
-  const features = [
-    [Sparkles, t("看位置和英雄熟练度，预测你们一起打单双排的胜率")],
-    [HeartHandshake, t("像 Tinder 一样滑卡，双方都喜欢才算互选")],
-    [ShieldCheck, t("互选后才交换 Riot ID，Discord 名给不给看由你决定")],
-  ] as const;
   const steps = [t("用 Discord 登录"), t("输入你的 Riot ID 绑定账号"), t("打开「同意被推荐」，开始找搭子")];
 
   return (
-    <div className="relative isolate py-6 lg:py-14">
-      <div aria-hidden="true" className="pointer-events-none absolute -inset-x-40 -inset-y-20 -z-10" style={{ background: GLOW }} />
-      <div className="mx-auto grid max-w-6xl items-center gap-10 lg:grid-cols-[1.15fr_1fr] lg:gap-16">
-        <section>
-          <p className="mb-4 inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium text-muted-foreground">
-            <span className="size-1.5 rounded-full bg-good" />{t("美服单双排 · 免费")}
-          </p>
-          <h1 className="text-4xl leading-tight tracking-tight text-balance lg:text-5xl">
-            {t("找一个")}<span className="text-neon">{t("真正合得来")}</span>{t("的双排搭子")}
-          </h1>
-          <p className="mt-4 max-w-xl text-muted-foreground">
-            {t("用 Discord 登录，再绑定你的 Riot 账号，就能进入推荐池找搭子。不登录也能用查组合。")}
-          </p>
-          <ul className="mt-8 space-y-4">
-            {features.map(([Icon, text]) => (
-              <li key={text} className="flex items-start gap-3">
-                <span className="glass neon-ring inline-flex size-9 shrink-0 items-center justify-center rounded-xl border bg-card">
-                  <Icon className="size-4.5 text-primary" />
-                </span>
-                <span className="pt-1.5 text-sm">{text}</span>
-              </li>
-            ))}
-          </ul>
-          <div className="mt-10 flex items-center gap-4">
-            <div className="flex -space-x-3">
-              {CAST.map((c) => (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img key={c} src={`/champions/${c}.png`} alt="" width={44} height={44}
-                  className="size-11 rounded-full border-2 border-background object-cover shadow-md" />
-              ))}
-            </div>
-            <p className="text-xs text-muted-foreground">{t("皮城和祖安的英雄都在等搭子")}</p>
-          </div>
-        </section>
-
+    <div className="mx-auto max-w-lg py-4 lg:py-10">
+      <FunnelEvent event="login_viewed" mode="public" />
         <Card className="p-6 lg:p-8" data-testid="login-card">
-          <h2 className="text-2xl font-bold tracking-tight">{t("登录 / 注册")}</h2>
+          <h1 className="text-2xl font-bold tracking-tight">{t("登录 / 注册")}</h1>
           <p className="mt-1 text-sm text-muted-foreground">{t("第一次用 Discord 登录就会自动注册。")}</p>
           <div className="mt-6">
             {discord ? (
@@ -85,7 +43,7 @@ export default async function LoginPage() {
                 </Button>
               </form>
             ) : (
-              <Alert>{t("网站还没配置 Discord 登录：在 web/.env.local 里填 AUTH_DISCORD_ID 和 AUTH_DISCORD_SECRET 后重启。")}</Alert>
+              <Alert>{t("登录暂时不可用，请先体验查组合或滑卡演示。")}</Alert>
             )}
           </div>
           <ol className="mt-6 space-y-3">
@@ -118,7 +76,6 @@ export default async function LoginPage() {
             </div>
           )}
         </Card>
-      </div>
     </div>
   );
 }
