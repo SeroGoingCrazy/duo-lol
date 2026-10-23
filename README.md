@@ -1,24 +1,37 @@
 # LoL Duo Finder
 
-A teammate finder for League of Legends players on NA. Check how two players fit together, explore champion combinations, and find someone to queue with — from match history to a mutual like.
+A teammate finder for League of Legends players on NA. Check how two players fit together, explore champion combinations, and swipe to find someone to queue with, from match history to a mutual like.
 
-![LoL Duo Finder: duo scores, champion recommendations, and the teammate discovery deck](docs/images/overview.png)
+![Duo check: duo score, predicted win rate, suggested roles and best champion pairs](docs/screenshots/duo-check.png)
 
-*Actual website UI with synthetic demo data. The players and scores above are illustrative.*
+*Screenshots show the actual site running locally on synthetic demo data (`data/fake_riot.py`). Players and scores are illustrative.*
 
-- **Check a duo (`/`)** — enter two Riot IDs to see a duo score, predicted win rate, suggested positions, and recommended champion pairs. Copy a link to share the result.
-- **Find a teammate (`/find`)** — browse cards ranked by predicted win rate, inspect champion combinations, and like or pass. Visitors can try a browser-local demo; verified, opted-in members can discover other members.
-- **Connect after a mutual like** — Riot IDs and contact details stay hidden on discovery cards until both members like each other. See mutual likes and games played together, with optional Discord notifications.
-- **Make it personal** — add a bio, languages, voice preferences, and play times; filter the deck and turn on a temporary “Looking now” status.
-- **Explore a player (`/player/[slug]`)** — view a player's profile and recent games. Players with fewer than 20 ranked games can select their champions and positions manually.
+## What's on the site
 
-The interface supports English and Chinese. Match statistics are scoped to **NA Ranked Solo/Duo (queue 420)**.
+- **Duo check (`/`)**: enter two Riot IDs to see a 0–100 duo score, the predicted win rate, suggested roles and recommended champion pairs. Copy a link to share the result.
+- **Find a duo (`/find`)**: a swipe deck ranked by predicted win rate. Each card flips through duo score, champion pairs and reasons; swipe, drag or use the arrow keys to like or pass, and undo your last pass. Visitors get a browser-local demo with simulated likes. Logged-in members who link a Riot ID and turn on “Recommend me” swipe real members.
+- **Matches**: Riot IDs stay hidden on cards until both members like each other. Matches and “likes you” show next to the deck, with optional Discord DM notifications. Members can block or report, and admins review reports at `/admin`.
+- **Player pages (`/player/Name-NA1`)**: rank, most played champions and recent ranked games, with a shortcut to check your duo with that player. Players with fewer than 20 ranked games can pick their champions and roles by hand.
+- **Accounts**: log in with Discord, link a Riot ID (marked *Unverified* until Riot Sign On is available, see [ADR-0011](docs/adr/0011-bind-riot-id-unverified-until-rso.md)), choose any summoner icon as your avatar, and add a bio, languages, voice preference, play times and a temporary “Looking now” status.
+- **English and Chinese** throughout, switchable from the header, on desktop and phone.
+
+Match statistics are scoped to **NA Ranked Solo/Duo (queue 420)**.
+
+| Find a duo | It's a match |
+| --- | --- |
+| ![Swipe deck with a suggested duo card](docs/screenshots/find.png) | ![Match dialog revealing the other player's Riot ID](docs/screenshots/match.png) |
+
+| Player page | Log in |
+| --- | --- |
+| ![Player page with most played champions and recent games](docs/screenshots/player.png) | ![Login page](docs/screenshots/login.png) |
+
+<p align="center"><img src="docs/screenshots/find-phone.png" alt="Swipe deck on a phone" width="300"></p>
 
 ## How the score works
 
 The prediction model combines player champion proficiency, champion strength, and champion-pair synergy using an Elo-based approach adapted from [DraftGap](https://github.com/vigovlugt/draftgap).
 
-The **duo score** expresses the predicted win rate as a percentile of a fitted distribution of eligible pairs in the recommendation pool with the same two positions. A score of 50 represents a typical pair in that distribution. It measures how two players fit together; it is not an individual skill or hidden MMR rating, and an 84 duo score does not mean an 84% chance of winning.
+The **duo score** expresses the predicted win rate as a percentile of a fitted distribution of eligible pairs in the recommendation pool with the same two positions ([ADR-0010](docs/adr/0010-score-within-same-positions.md)). The fitted scale is stored in the database, refitted daily and loaded by the API at startup. A score of 50 represents a typical pair in that distribution. It measures how two players fit together; it is not an individual skill or hidden MMR rating, and an 84 duo score does not mean an 84% chance of winning.
 
 Pair statistics cover any two players on the same team, whether they queued together or were matched by the game. See the [model decision](docs/adr/0001-draftgap-style-rating-model.md) and [pair definition](docs/adr/0002-pair-means-any-teammates.md).
 
@@ -26,10 +39,10 @@ Pair statistics cover any two players on the same team, whether they queued toge
 
 | Layer | Stack |
 | --- | --- |
-| Website | Next.js 15, React 19, TypeScript, Tailwind CSS 4, Radix UI |
-| Authentication | Auth.js with Discord login; Riot account ownership verified through an icon challenge |
+| Website | Next.js 15, React 19, TypeScript, Tailwind CSS 4, Radix UI, Motion; “Arcane” neon theme with Space Grotesk |
+| Authentication | Auth.js with Discord login; Riot ID linked as unverified until Riot Sign On (RSO) |
 | Application data | Drizzle ORM; PGlite locally, Postgres in production |
-| Match data and predictions | Python, FastAPI, Riot API; SQLite locally or Postgres in production |
+| Match data and predictions | Python, FastAPI, Riot API; Postgres on Neon (`DATABASE_URL`) or a local SQLite file |
 | Verification | pytest and Playwright |
 | Deployment | Vercel website, Fly.io Python API, Neon Postgres |
 
@@ -75,7 +88,7 @@ $env:DUO_FAKE_RIOT = "1"
 uv run uvicorn api:app --app-dir data --port 8000
 ```
 
-To use real data, omit `DUO_FAKE_RIOT` and point `DUO_DB` to your collected match database. Score calibration is computed in the background when needed.
+To use real data, omit `DUO_FAKE_RIOT` and `DUO_DB`: the API then reads `DATABASE_URL` from the root `.env` (the shared Neon database), or `lol_duo.sqlite` if that is empty. `DUO_DB` can point at any SQLite file or Postgres URL instead. If the database has no fitted score scale yet, the API fits one in the background; to do it up front, run `uv run python data/score_scale.py --db <database>`.
 
 ### 3. Start the website
 
