@@ -7,11 +7,15 @@ import RiotIdField from "@/components/RiotIdField";
 import SelfReportForm from "@/components/SelfReportForm";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { ApiError, ensurePlayer, findPartners, listChampions, riotIdProblem, type DeckCard, type LookupUpdate, type Partner, type Player, type SelfReport } from "@/lib/api";
+import { ApiError, ensurePlayer, findPartners, listChampions, riotIdKey, riotIdProblem, type DeckCard, type LookupUpdate, type Partner, type Player, type SelfReport } from "@/lib/api";
 import { trackFunnel } from "@/lib/analytics";
 import { cardKey, DECK_SIZE, likesYou, loadSwipes, saveSwipes, type Swipe, type SwipeLog } from "@/lib/deck";
 import { useChampionInfo } from "@/lib/useChampionInfo";
 import { useT } from "@/components/LangProvider";
+
+type DemoFailure =
+  | { stage: "lookup"; id: string }
+  | { stage: "recommendation"; player: Player; report?: SelfReport };
 
 const asCard = (p: Partner): DeckCard => ({ ...p, id: cardKey(p) });
 
@@ -24,6 +28,8 @@ export default function DemoDeck({ notice }: { notice: React.ReactNode }) {
   const [loading, setLoading] = useState("");
   const [progress, setProgress] = useState<LookupUpdate | null>(null);
   const [error, setError] = useState("");
+  const [failure, setFailure] = useState<DemoFailure | null>(null);
+  const [draft, setDraft] = useState<SelfReport | undefined>();
   const [player, setPlayer] = useState<Player | null>(null);   // set while 数据不足 waits for 自选英雄
   const [deckOwner, setDeckOwner] = useState("");             // whose 牌堆 is showing
   const [partners, setPartners] = useState<Partner[] | null>(null);
@@ -32,7 +38,14 @@ export default function DemoDeck({ notice }: { notice: React.ReactNode }) {
   const [log, setLog] = useState<SwipeLog>({ swipes: {}, lastPass: null });
   const [round, setRound] = useState(0);   // remounts the stage on 重新开始 or a new player
   const started = useRef(false);
+  const requestGeneration = useRef(0);
+  const mounted = useRef(true);
   const ready = me.trim() !== "" && !riotIdProblem(me);
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
 
   useEffect(() => { listChampions().then(setChampions).catch(() => setChampions([])); }, []);
   useEffect(() => {
@@ -73,36 +86,63 @@ export default function DemoDeck({ notice }: { notice: React.ReactNode }) {
   }
 
   async function recommend(p: Player, report?: SelfReport) {
-    setPlayer(null); setBusy(true); setLoading(t("正在从推荐池里准备你的牌堆…"));
+    const generation = ++requestGeneration.current;
+    const active = () => mounted.current && generation === requestGeneration.current;
+    setError(""); setFailure(null); setPlayer(p); setDraft(report);
+    setBusy(true); setLoading(t("正在从推荐池里准备你的牌堆…"));
     try {
       const out = await findPartners(p.riot_id, report, DECK_SIZE);
+      if (!active()) return;
       setDeckOwner(p.riot_id);
       setLog(loadSwipes(p.riot_id));
       setRound((r) => r + 1);
       setPartners(out.partners); setNotes(out.notes);
       trackFunnel("deck_loaded", "demo");
+      if (out.partners.length === 0) trackFunnel("deck_empty", "demo");
     } catch (err) {
+      if (!active()) return;
       setError(err instanceof ApiError ? err.message : String(err));
+      setFailure({ stage: "recommendation", player: p, report });
     } finally {
-      setBusy(false); setLoading("");
+      if (active()) { setBusy(false); setLoading(""); }
     }
   }
 
   async function search(id: string) {
-    setError(""); setPartners(null); setPlayer(null); setNotes([]); setBusy(true); setProgress(null);
+    const generation = ++requestGeneration.current;
+    const active = () => mounted.current && generation === requestGeneration.current;
+    setError(""); setFailure(null); setDraft(undefined);
+    setPartners(null); setPlayer(null); setNotes([]); setBusy(true); setProgress(null);
     const url = new URL(window.location.href);
     url.searchParams.set("me", id.trim());
     window.history.replaceState(null, "", url);
     try {
       setLoading(t("正在查询 {id}…", { id: id.trim() }));
-      const p = await ensurePlayer(id.trim(), setProgress);
+      const p = await ensurePlayer(id.trim(), (update) => { if (active()) setProgress(update); });
+      if (!active()) return;
       setLoading(""); setBusy(false);
       if (p.insufficient_data) setPlayer(p);   // ask for 自选英雄 first
       else await recommend(p);
     } catch (err) {
+      if (!active()) return;
       setError(err instanceof ApiError ? err.message : String(err));
+      setFailure({ stage: "lookup", id });
       setBusy(false); setLoading("");
     }
+  }
+
+  function changeId(value: string) {
+    setMe(value);
+    if (riotIdKey(me) === riotIdKey(value)) return;
+    requestGeneration.current += 1;
+    setBusy(false); setLoading(""); setProgress(null); setError(""); setFailure(null);
+    setPlayer(null); setDraft(undefined); setPartners(null); setNotes([]);
+  }
+
+  function retry() {
+    if (!failure || busy) return;
+    if (failure.stage === "lookup") search(failure.id);
+    else recommend(failure.player, failure.report);
   }
 
   return (
@@ -125,15 +165,22 @@ export default function DemoDeck({ notice }: { notice: React.ReactNode }) {
       <details open={partners ? undefined : true} className="mb-2 rounded-2xl border bg-card px-3 py-2 sm:mb-6 sm:p-4" key={partners ? "loaded" : "search"}>
         <summary className="cursor-pointer text-sm font-medium">{partners ? <><span className="text-muted-foreground">{t("当前玩家")}</span> <span className="mx-2">{deckOwner}</span><span className="text-xs text-primary">{t("更换玩家")}</span></> : t("从你的 Riot ID 开始")}</summary>
         <form className="mt-3 flex flex-wrap items-start gap-3" onSubmit={(e) => { e.preventDefault(); if (ready && !busy) search(me); }}>
-          <RiotIdField label={t("你的 Riot ID")} placeholder="Name#NA1" value={me} onChange={setMe} />
+          <RiotIdField label={t("你的 Riot ID")} placeholder="Name#NA1" value={me} onChange={changeId} />
           <Button className="mt-5 w-full sm:w-auto" disabled={busy || !ready}>{t("开始滑卡")}</Button>
         </form>
       </details>
 
       <div className="space-y-3">
         {loading && <LookupProgress label={loading} progress={loading !== t("正在从推荐池里准备你的牌堆…") ? progress : undefined} hint={loading !== t("正在从推荐池里准备你的牌堆…") ? t("第一次查询的玩家大约需要 2 分钟，之后会缓存。") : undefined} />}
-        {error && <Alert variant="error">{t.api(error)}</Alert>}
-        {player && <SelfReportForm className="max-w-3xl" player={player} champions={champions} onSubmit={(r) => recommend(player, r)} />}
+        {error && <Alert variant="error">
+          <p>{t.api(error)}</p>
+          <p className="mt-1">{t("输入和已加载的资料已保留，可以直接重试。")}</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button variant="outline" disabled={busy} onClick={retry}>{t(failure?.stage === "recommendation" ? "重试推荐" : "重试查询")}</Button>
+            {failure?.stage === "recommendation" && player?.insufficient_data && <Button variant="outline" onClick={() => { setError(""); setFailure(null); }}>{t("修改自选英雄")}</Button>}
+          </div>
+        </Alert>}
+        {player?.insufficient_data && !busy && !failure && !partners && <SelfReportForm className="max-w-3xl" player={player} champions={champions} initial={draft} onSubmit={(r) => recommend(player, r)} />}
         {partners && partners.length === 0 && <Alert>{t("推荐池里暂时没有能和你一起排的玩家。")}</Alert>}
       </div>
 

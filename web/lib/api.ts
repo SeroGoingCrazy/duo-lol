@@ -74,7 +74,7 @@ export type SelfReport = { tier?: string; picks: Pick[] };
 export const POSITIONS = ["TOP", "JUNGLE", "MIDDLE", "BOTTOM", "UTILITY"] as const;
 
 export class ApiError extends Error {
-  constructor(public status: number, public detail: unknown) {
+  constructor(public status: number, public detail: unknown, public code?: string) {
     super(typeof detail === "string" ? detail : describe(status));
   }
 }
@@ -93,7 +93,7 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
     throw new ApiError(0, "连不上服务器，请确认网站和 Python API 都在运行");
   }
   const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new ApiError(res.status, body.detail ?? body);
+  if (!res.ok) throw new ApiError(res.status, body.detail ?? body, typeof body.code === "string" ? body.code : undefined);
   return body as T;
 }
 
@@ -202,6 +202,8 @@ export type Deck = {
   cards: DeckCard[]; likes_you: string[]; mutual: DeckCard[];
   likes_remaining: number; can_undo: boolean; retry_after: number | null;
   filter: DeckFilter; looking_until: string | null;
+  /** A successful empty response; player-cache misses during scoring return 409 / not_cached. */
+  empty_reason: "filtered" | "no_candidates" | null;
 };
 export type SwipeResult = {
   mutual_like: boolean; match: { riot_id: string; discord: string | null; avatar: string | null; riot_verified: boolean; duo_record: DuoRecord | null } | null; likes_remaining: number;

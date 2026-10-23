@@ -8,6 +8,7 @@ import SwipeCard from "@/components/SwipeCard";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import type { DeckCard } from "@/lib/api";
+import { trackFunnel } from "@/lib/analytics";
 import type { ChampionInfo } from "@/lib/champions";
 import type { Swipe } from "@/lib/deck";
 import { useT } from "@/components/LangProvider";
@@ -35,10 +36,37 @@ export default function DeckStage({ remaining, total, mutual, likes, info, canUn
   const [fling, setFling] = useState<Swipe | null>(null);
   const [matched, setMatched] = useState<DeckCard | null>(null);
   const cardArea = useRef<HTMLDivElement>(null);
+  const visibleCard = useRef<HTMLDivElement>(null);
+  const firstCardViewed = useRef(false);
   const [mobileHeight, setMobileHeight] = useState<number | undefined>();
   const likeIds = new Set(likes.map((c) => c.id));
   const top = (focus && remaining.find((c) => c.id === focus)) || remaining[0] || null;
   const behind = remaining.find((c) => c !== top) ?? null;
+
+  // A loaded response is not an impression: wait for a real card in a visible tab's viewport.
+  useEffect(() => {
+    const card = visibleCard.current;
+    if (!top || !card || firstCardViewed.current || paused || matched) return;
+    const observer = new IntersectionObserver((entries) => {
+      if (firstCardViewed.current || document.visibilityState !== "visible") return;
+      if (!entries.some((entry) => entry.isIntersecting && entry.intersectionRatio >= 0.01)) return;
+      firstCardViewed.current = true;
+      trackFunnel("first_card_viewed", demo ? "demo" : "member");
+      observer.disconnect();
+    }, { threshold: 0.01 });
+    const onVisibilityChange = () => {
+      if (document.visibilityState !== "visible" || firstCardViewed.current) return;
+      // Ask for fresh geometry: the page may have moved while its tab was hidden.
+      observer.unobserve(card);
+      observer.observe(card);
+    };
+    observer.observe(card);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      observer.disconnect();
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [top?.id, demo, paused, matched]);
 
   // Size the initial mobile card around the real header, leaving the entire action row visible.
   // Use document coordinates so scrolling does not resize the card under a finger.
@@ -97,7 +125,7 @@ export default function DeckStage({ remaining, total, mutual, likes, info, canUn
             {top ? (
               <>
                 {behind && <><div className="absolute inset-x-6 inset-y-0 translate-y-4 rounded-3xl border bg-card opacity-40" aria-hidden /><div className="absolute inset-x-3 inset-y-0 translate-y-2 rounded-3xl border bg-card opacity-80" aria-hidden /></>}
-                <div className="absolute inset-0">
+                <div ref={visibleCard} className="absolute inset-0">
                   <SwipeCard key={top.id} p={top} info={info} fling={fling} onSwipeStart={setFling} onSwiped={swiped} likesYou={likeIds.has(top.id)} demo={demo} />
                 </div>
               </>
