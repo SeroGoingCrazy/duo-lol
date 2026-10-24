@@ -1,5 +1,5 @@
 // 牌堆, 喜欢 / 跳过, 互选, 拉黑 and 举报 for 会员 (PRD-v2 §3.2-3.4, §6.1, §8). Server only.
-// The site applies the hard filters on its own tables; the Python API scores and ranks what is left (ADR-0006).
+// The site applies hard filters and the 现在想打 group; Python keeps the existing prediction order within each group.
 import { and, desc, eq, gt, gte, inArray, isNull, or, sql, type SQLWrapper } from "drizzle-orm";
 import { after } from "next/server";
 import { auth } from "@/auth";
@@ -15,8 +15,8 @@ import { avatarUrls } from "@/lib/profileIcons";
 export const DAILY_LIKES = 100;        // §8: a cap against liking everyone; it never affects the order
 export const ACTIVE_DAYS = 14;         // §3.2: only 会员 seen in the last 14 days are dealt
 export const SUSPEND_AFTER = 3;        // §8: reports from this many different 会员 pause recommendations
-const DECK_LIMIT = 200;                // data/api.py MAX_DECK
-const MAX_CANDIDATES = 4000;           // under data/api.py MAX_CANDIDATES, leaving room for 互选
+const DECK_LIMIT = 200;                // data/api.py MAX_DECK; response-size tradeoff, never part of prediction
+const MAX_CANDIDATES = 4000;           // per recall route: scoring-cost cap below data/api.py MAX_CANDIDATES
 
 const { members, memberPrefs, swipes, mutualLikes, blocks, reports, authAccounts, riotBans } = schema;
 type Db = Awaited<ReturnType<typeof getDb>>;
@@ -82,6 +82,16 @@ async function score(me: Member, report: SelfReport | null | undefined, others: 
   return out;
 }
 
+/** 喜欢我的人 must survive both the recall cap and Python's top-200 response cap (PRD-v3 §5.2 ③).
+ *  Batches are at most one response so every scoreable liker is returned, without changing prediction. */
+async function scoreLikers(me: Member, report: SelfReport | null | undefined, others: { member: Member; report: SelfReport | null }[]) {
+  const out = new Map<string, Partner>();
+  for (let start = 0; start < others.length; start += DECK_LIMIT) {
+    for (const [id, partner] of await score(me, report, others.slice(start, start + DECK_LIMIT))) out.set(id, partner);
+  }
+  return out;
+}
+
 /** What the card shows about a 会员 next to the model's numbers. */
 export function profileOf(prefs: Prefs, now = new Date()): MemberProfile {
   return {
@@ -100,7 +110,7 @@ const unscored = (id: string, profile: MemberProfile): DeckCard => ({
   id, tier: "", division: null, win_rate: 0, win_rate_delta: 0, score: null, roles: { a: "", b: "" }, top_pairs: [], reasons: [], profile,
 });
 
-/** GET /api/deck: the 牌堆 (best 预测胜率 first), who likes me, and my 互选 with their Riot IDs.
+/** GET /api/deck: both 现在想打 first, then the existing 预测胜率 order, likes and 互选 with their Riot IDs.
  *  My 牌堆 filters drop cards before scoring, but never someone who already likes me. */
 export async function deck() {
   const { me, prefs, db } = await swiper();
@@ -125,34 +135,51 @@ export async function deck() {
   pool.sort((a, b) => +b.members.lastActiveAt! - +a.members.lastActiveAt!);   // most recently active first if capped
   const filter = cleanFilter(prefs?.deckFilter, POSITIONS);
   const now = new Date();
+  const looking = !!prefs?.lookingUntil && prefs.lookingUntil > now;
   const eligible = pool.filter((r) => !hidden.has(r.members.id) && !swiped.has(r.members.id) && !mutual.has(r.members.id));
   const passesFilter = (r: (typeof pool)[number]) => likers.has(r.members.id) || passes(profileOf(r.member_prefs, now), filter);
-  const unseen = eligible.filter(passesFilter).slice(0, MAX_CANDIDATES);
+  const candidates = eligible.filter(passesFilter);
+  const bothLooking = (r: (typeof pool)[number]) => looking && !!r.member_prefs.lookingUntil && r.member_prefs.lookingUntil > now;
+  // Recall ④ separately so recent inactive members cannot crowd out 现在想打 before grouping.
+  // Score the two groups separately too: Python's top-200 cutoff must not discard group 1.
+  const lookingCandidates = candidates.filter(bothLooking).slice(0, MAX_CANDIDATES);
+  const otherCandidates = candidates.filter((r) => !bothLooking(r)).slice(0, MAX_CANDIDATES);
+  const likedCandidates = candidates.filter((r) => likers.has(r.members.id));
+  const unseen = [...new Map([...lookingCandidates, ...otherCandidates, ...likedCandidates].map((r) => [r.members.id, r])).values()];
   const asCandidate = (r: (typeof pool)[number]) => ({ member: r.members, report: r.member_prefs.selfReport ?? null });
   // scored apart, so 互选 never take 牌堆 slots and keep their own score
   const shownMutual = mutualRows.filter((r) => !hidden.has(r.members.id));
-  const [scored, scoredMutual, records] = await Promise.all([
-    score(me, prefs?.selfReport, unseen.map(asCandidate)),
+  const [scoredLooking, scoredOther, scoredLikes, scoredMutual, records] = await Promise.all([
+    score(me, prefs?.selfReport, lookingCandidates.map(asCandidate)),
+    score(me, prefs?.selfReport, otherCandidates.map(asCandidate)),
+    scoreLikers(me, prefs?.selfReport, likedCandidates.map(asCandidate)),
     score(me, prefs?.selfReport, shownMutual.map(asCandidate)),
     duoRecords(me, shownMutual.map((r) => ({ id: r.members.id, riotId: r.members.riotId! }))),
   ]);
+  const scored = new Map([...scoredLooking, ...scoredOther, ...scoredLikes]);
 
   const avatar = await avatarUrls();
-  const cards: DeckCard[] = [];
+  let cards: DeckCard[] = [];
   for (const r of unseen) {
     const p = scored.get(r.members.id);
-    if (p) cards.push({ ...card(r.members.id, p, profileOf(r.member_prefs, now)), avatar: avatar(r.members.avatarIconId) });
+    if (p) cards.push({ ...card(r.members.id, p, profileOf(r.member_prefs, now)), avatar: avatar(r.members.avatarIconId),
+      reasons: bothLooking(r) ? ["你们现在都想打", ...p.reasons] : p.reasons });
   }
-  cards.sort((a, b) => b.win_rate - a.win_rate);
+  cards.sort((a, b) => Number(looking && b.profile?.looking_now) - Number(looking && a.profile?.looking_now) || b.win_rate - a.win_rate);
+  // Keep the normal response budget; eligible 喜欢我的人 remain accessible even beyond it.
+  cards = cards.filter((c, index) => index < DECK_LIMIT || likers.has(c.id));
   let emptyReason: Deck["empty_reason"] = null;
   if (cards.length === 0) {
     emptyReason = "no_candidates";
     if (isFiltered(filter)) {
       // Only blame filters if clearing them could produce a scored card. Uncached, data-poor or
       // rank-incompatible members can be in the pool without ever becoming recommendations.
-      // Apply the same cap as an unfiltered request before probing the excluded candidates.
-      const excluded = eligible.slice(0, MAX_CANDIDATES).filter((r) => !passesFilter(r));
-      if ((await score(me, prefs?.selfReport, excluded.map(asCandidate))).size > 0) emptyReason = "filtered";
+      // Apply each unfiltered recall route's cap before probing excluded candidates.
+      const excludedLooking = eligible.filter(bothLooking).slice(0, MAX_CANDIDATES).filter((r) => !passesFilter(r));
+      const excludedOther = eligible.filter((r) => !bothLooking(r)).slice(0, MAX_CANDIDATES).filter((r) => !passesFilter(r));
+      const probes = await Promise.all([score(me, prefs?.selfReport, excludedLooking.map(asCandidate)),
+        score(me, prefs?.selfReport, excludedOther.map(asCandidate))]);
+      if (probes.some((p) => p.size > 0)) emptyReason = "filtered";
     }
   }
   // a 互选 stays listed even if the pair can no longer be scored (say, one of them climbed out of duo range)
@@ -203,12 +230,15 @@ async function latestPass(db: Db, me: string) {
   return last?.action === "pass" ? last.toMember : null;
 }
 
-async function contact(db: Db, id: string) {
+async function contact(db: Db, id: string, me: string) {
   const [row] = await db.select().from(members).leftJoin(memberPrefs, eq(memberPrefs.memberId, members.id)).where(eq(members.id, id));
   if (!row) return null;   // 注销 a moment ago
+  const [mine] = await db.select({ lookingUntil: memberPrefs.lookingUntil }).from(memberPrefs).where(eq(memberPrefs.memberId, me));
+  const now = new Date();
   return {
     riot_id: row.members.riotId!, discord: row.member_prefs?.showDiscord ? row.members.name : null,
     avatar: (await avatarUrls())(row.members.avatarIconId), riot_verified: !!row.members.verifiedAt,
+    both_looking_now: !!mine?.lookingUntil && mine.lookingUntil > now && !!row.member_prefs?.lookingUntil && row.member_prefs.lookingUntil > now,
   };
 }
 
@@ -239,7 +269,7 @@ export async function swipe(to: string, action: "like" | "pass") {
       .onConflictDoUpdate({ target: [mutualLikes.memberA, mutualLikes.memberB], set: { cancelledAt: null, createdAt: new Date() } });
     return true;
   });
-  const found = matched ? await contact(db, to) : null;
+  const found = matched ? await contact(db, to, me.id) : null;
   const match = found && { ...found, duo_record: (await duoRecords(me, [{ id: to, riotId: found.riot_id }])).get(to) ?? null };
   if (match) after(() => notifyMatch(db, to));   // they may not be on the site right now; runs after the response
   return { mutual_like: match !== null, match, likes_remaining: DAILY_LIKES - (await likesToday(db, me.id)) };
@@ -290,6 +320,20 @@ export async function unseenCount(memberId: string) {
   return matches + likes;
 }
 
+/** Nav availability count for every bound 会员, including those yet to opt in. No identities leave the server. */
+export async function lookingNowCount(memberId: string) {
+  const db = await getDb();
+  const [viewer] = await db.select({ boundAt: members.boundAt, puuid: members.puuid }).from(members).where(eq(members.id, memberId));
+  if (!viewer?.boundAt || !viewer.puuid) return 0;
+  const [{ n }] = await db.select({ n: sql<number>`count(*)::int` }).from(members)
+    .innerJoin(memberPrefs, eq(memberPrefs.memberId, members.id))
+    .where(and(eq(memberPrefs.recommendOptIn, true), isNull(members.suspendedAt), gt(memberPrefs.lookingUntil, new Date()),
+      sql`${members.boundAt} is not null`, sql`${members.puuid} is not null`, sql`${members.id} <> ${memberId}`,
+      sql`not exists (select 1 from ${blocks} where (${blocks.fromMember} = ${memberId} and ${blocks.toMember} = ${members.id})
+        or (${blocks.fromMember} = ${members.id} and ${blocks.toMember} = ${memberId}))`));
+  return n;
+}
+
 /** Discord DM to the other side of a new 互选, if they ticked 互选通知. No names: the site shows who. */
 async function notifyMatch(db: Db, memberId: string) {
   try {
@@ -320,7 +364,7 @@ export async function mutualLikesOf() {
   const mutual = await activeMutualIds(db, me.id);
   const out = [];
   for (const [id, at] of mutual) {
-    const c = hidden.has(id) ? null : await contact(db, id);
+    const c = hidden.has(id) ? null : await contact(db, id, me.id);
     if (c) out.push({ id, ...c, created_at: at });
   }
   return out.sort((a, b) => +b.created_at - +a.created_at);

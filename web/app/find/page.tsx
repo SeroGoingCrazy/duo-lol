@@ -26,5 +26,5 @@ export default async function FindPage() {
   const missing = me?.suspendedAt ? t("你的账号因被举报暂停推荐，等待管理员处理。")
     : !me?.boundAt ? t("先在我的账号里绑定 Riot 账号，")
     : t("先在我的账号里开启“同意被推荐”，");
-  return <><FunnelEvent event="find_viewed" mode="demo" /><DemoDeck member notice={<>{t("这是演示版。")}{missing}{!me?.suspendedAt && <><Link href={me?.boundAt ? "/account#recommendation" : "/account#binding"}>{me?.boundAt ? t("完成偏好与推荐") : t("去绑定 Riot 账号")}</Link>{t("，完成后就能和真实会员互滑。")}</>}</>} /></>;
+  return <><FunnelEvent event="find_viewed" mode="demo" /><DemoDeck member boundMember={!!me?.boundAt && !me.suspendedAt} notice={<>{t("这是演示版。")}{missing}{!me?.suspendedAt && <><Link href={me?.boundAt ? "/account#recommendation" : "/account#binding"}>{me?.boundAt ? t("完成偏好与推荐") : t("去绑定 Riot 账号")}</Link>{t("，完成后就能和真实会员互滑。")}</>}</>} /></>;
 }

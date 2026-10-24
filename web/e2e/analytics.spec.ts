@@ -11,6 +11,10 @@ test("analytics validates anonymous milestones and accepts idempotent writes", a
   expect((await post(payload, { dnt: "1" })).status()).toBe(204);
   expect((await post(payload, { origin: baseURL! })).status()).toBe(204);
   expect((await post(payload, { origin: baseURL! })).status()).toBe(204);
+  for (const event of ["pair_invite_clicked", "pair_find_more_clicked"]) {
+    expect((await post({ ...payload, event }, { origin: baseURL! })).status()).toBe(204);
+    expect((await post({ ...payload, event, url: "/?a=NeverStored%23NA1" })).status()).toBe(400);
+  }
   for (const event of ["deck_empty", "first_card_viewed"]) {
     for (const mode of ["demo", "member"]) {
       expect((await post({ ...payload, event, mode }, { origin: baseURL! })).status()).toBe(204);

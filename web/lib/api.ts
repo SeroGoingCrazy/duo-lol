@@ -195,6 +195,8 @@ export type DeckCard = Omit<Partner, "riot_id"> & {
   id: string; riot_id?: string; discord?: string | null; profile?: MemberProfile; duo_record?: DuoRecord | null;
   /** 头像 can appear before 互选; Riot ID and contact details remain hidden until 互选 (ADR-0011). */
   avatar?: string | null; riot_verified?: boolean;
+  /** Current status checked by the server when a 喜欢 creates a 互选. */
+  both_looking_now?: boolean;
 };
 
 // 会员 牌堆 (PRD-v2 §6.1), served by Next itself rather than the Python API.
@@ -206,10 +208,12 @@ export type Deck = {
   empty_reason: "filtered" | "no_candidates" | null;
 };
 export type SwipeResult = {
-  mutual_like: boolean; match: { riot_id: string; discord: string | null; avatar: string | null; riot_verified: boolean; duo_record: DuoRecord | null } | null; likes_remaining: number;
+  mutual_like: boolean; match: { riot_id: string; discord: string | null; avatar: string | null; riot_verified: boolean; duo_record: DuoRecord | null; both_looking_now: boolean } | null; likes_remaining: number;
 };
 
 export const getDeck = () => call<Deck>("/api/deck", { cache: "no-store" });
+export const getComplementaryPoolCount = () =>
+  call<{ count: number; opted_in: boolean }>("/api/deck/pool-count", { cache: "no-store" });
 export const postSwipe = (to: string, action: "like" | "pass") =>
   call<SwipeResult>("/api/swipes", { method: "POST", body: JSON.stringify({ to, action }) });
 export const undoSwipe = () => call<{ undone: string }>("/api/swipes/undo", { method: "POST" });

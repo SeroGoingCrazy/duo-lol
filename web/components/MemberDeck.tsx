@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import DeckFilters from "@/components/DeckFilters";
 import DeckStage from "@/components/DeckStage";
+import EmptyPoolPrompt from "@/components/EmptyPoolPrompt";
 import LookupProgress from "@/components/LookupProgress";
 import SelfReportForm from "@/components/SelfReportForm";
 import { Alert } from "@/components/ui/alert";
@@ -44,6 +45,8 @@ export default function MemberDeck({ riotId }: { riotId: string }) {
   const [reporting, setReporting] = useState<DeckCard | null>(null);
   const [filter, setFilter] = useState<DeckFilter | null>(null);
   const [lookingUntil, setLookingUntil] = useState<Date | null>(null);
+  const [savingLooking, setSavingLooking] = useState(false);
+  const [pendingSwipes, setPendingSwipes] = useState(0);
   const swiped = useRef(new Map<string, DeckCard>());   // so 撤销 can put the card back without a reload
   const backoff = useRef<{ wait: number; timer: ReturnType<typeof setTimeout> | null }>({ wait: 0, timer: null });
   const me = useRef<Player | null>(null);
@@ -129,6 +132,7 @@ export default function MemberDeck({ riotId }: { riotId: string }) {
 
   // Optimistic like Tinder's web app: the card leaves at once and comes back if the server refuses.
   async function onSwipe(c: DeckCard, s: Swipe) {
+    setPendingSwipes((n) => n + 1);
     setCards((cs) => cs?.filter((x) => x.id !== c.id) ?? cs);
     swiped.current.set(c.id, c);
     try {
@@ -147,7 +151,7 @@ export default function MemberDeck({ riotId }: { riotId: string }) {
       setCards((cs) => (cs ? [c, ...cs] : [c]));
       setError(e instanceof ApiError ? e.message : String(e));
       return null;
-    }
+    } finally { setPendingSwipes((n) => n - 1); }
   }
 
   async function onUndo() {
@@ -182,10 +186,22 @@ export default function MemberDeck({ riotId }: { riotId: string }) {
 
   const looking = !!lookingUntil && lookingUntil > new Date();
   async function toggleLooking() {
+    // A toggle changes ordering. Wait until any filter intent is saved (the button is disabled
+    // during loading), then hide the old deck so an in-flight refresh cannot restore a swiped card.
+    const seq = ++latest.current;
+    if (backoff.current.timer) { clearTimeout(backoff.current.timer); backoff.current.timer = null; }
+    setSavingLooking(true); setLoading({}); setError(""); setRetry(null);
     try {
       const r = await setLooking(!looking);
+      if (seq !== latest.current) return;
       setLookingUntil(r.looking_until ? new Date(r.looking_until) : null);
-    } catch (e) { setError(e instanceof ApiError ? e.message : String(e)); }
+      await load(false, getDeck, seq);
+    } catch (e) {
+      if (seq === latest.current) setError(e instanceof ApiError ? e.message : String(e));
+    } finally {
+      setSavingLooking(false);
+      if (seq === latest.current) setLoading(null);
+    }
   }
 
   async function act(fn: () => Promise<unknown>, id: string) {
@@ -207,7 +223,7 @@ export default function MemberDeck({ riotId }: { riotId: string }) {
         <div className="contents sm:flex sm:flex-wrap sm:items-center sm:gap-2">
           {filter && (
             <Button variant={looking ? "default" : "outline"} className={looking ? "h-8 gap-2 rounded-full bg-good bg-none px-3 text-xs text-good-foreground shadow-none hover:bg-good/90" : "h-8 gap-2 rounded-full px-3 text-xs"}
-              aria-pressed={looking} onClick={toggleLooking} data-testid="looking-toggle"
+              aria-pressed={looking} disabled={!!loading || savingLooking || !!retry || pendingSwipes > 0} onClick={toggleLooking} data-testid="looking-toggle"
               title={looking ? t("{time} 前显示为现在想打，再点一下关掉", { time: lookingUntil!.toLocaleTimeString(t.lang === "en" ? "en-US" : "zh-CN", { hour: "numeric", minute: "2-digit" }) }) : t("别人会在卡片上看到你现在想打，{h} 小时后自动关掉", { h: LOOKING_HOURS })}>
               <span className={looking ? "size-2 rounded-full bg-good-foreground" : "size-2 rounded-full bg-muted-foreground/50"} />{t("现在想打")}
             </Button>
@@ -230,7 +246,7 @@ export default function MemberDeck({ riotId }: { riotId: string }) {
           <p className="mt-1">{t("对局资料仍在读取，查看进度后会继续查找搭子。")}</p>
           <Button className="mt-3" onClick={() => void preparePlayer()}>{t("查看加载进度")}</Button>
         </Alert>}
-        {filter && <fieldset disabled={savingReport || !!loading?.riotId}><DeckFilters filter={filter} onChange={changeFilter} /></fieldset>}
+        {filter && <fieldset disabled={savingReport || savingLooking || !!loading?.riotId}><DeckFilters filter={filter} onChange={changeFilter} /></fieldset>}
         {error && <Alert variant="error">
           <p>{t.api(error)}</p>
           {retry && <>
@@ -244,7 +260,7 @@ export default function MemberDeck({ riotId }: { riotId: string }) {
       </div>
 
       {cards && !loading && !waitingForPlayer && !needPicks && !retry && (
-        <DeckStage remaining={cards} mutual={mutual} likes={cards.filter((c) => likers.has(c.id))} info={info}
+        <DeckStage remaining={cards} mutual={mutual} likes={cards.filter((c) => likers.has(c.id))} info={info} lookingNowFirst={looking}
           canUndo={canUndo} onSwipe={onSwipe} onUndo={onUndo} cardActions={safety} paused={!!reporting}
           mutualActions={(c) => <>
             <Button variant="ghost" className={small} onClick={() => act(() => cancelMutualLike(c.id), c.id)}>{t("取消互选")}</Button>
@@ -256,6 +272,7 @@ export default function MemberDeck({ riotId }: { riotId: string }) {
               ? "筛选挡住了可推荐的会员，清除筛选、放宽条件后再看看。"
               : total > 0 ? "你已看完当前牌堆，可以重新查找，或先和朋友查组合。"
               : "暂时没有符合推荐条件的新会员。我们会自动检查，你也可以先和朋友查组合。")}</p>
+            <EmptyPoolPrompt refresh={latest.current} />
             <div className="flex flex-wrap justify-center gap-2">
               {filter && isFiltered(filter) && <Button onClick={() => changeFilter(NO_FILTER)}>{t("一键清除筛选")}</Button>}
               <Button variant={emptyReason === "filtered" ? "outline" : "default"} asChild><a href={`/?a=${encodeURIComponent(riotId)}#duo-check`}>{t("和朋友查组合")}</a></Button>

@@ -184,7 +184,7 @@ export default function PairPage() {
 
         {result && pending.length === 0 && (
           <>
-            <PairResultView r={result} shareable={needs.length === 0} />
+            <PairResultView r={result} enteredIds={[a.trim(), b.trim()]} shareable={needs.length === 0} />
             {needs.length > 0 && (
               <Button variant="outline" className="self-start" onClick={editReports}>{t("修改自选英雄")}</Button>
             )}
