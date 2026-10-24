@@ -162,6 +162,28 @@ def test_duplicate_lookup_joins_running_job(client):
     lookup(client, "Delta#NA1")
 
 
+def test_new_lookups_are_limited_per_browser(client, monkeypatch):
+    monkeypatch.setattr(api, "LOOKUPS_PER_IP", 2)
+    monkeypatch.setattr(api, "lookup_starts", api.defaultdict(api.deque))
+    start = lambda name, ip=None: client.post(
+        "/api/lookups", json={"riot_id": name}, headers={"x-duo-client-ip": ip} if ip else {})
+    assert start("Nobody1#NA1", "1.2.3.4").status_code == 200
+    assert start("Nobody2#NA1", "1.2.3.4").status_code == 200
+    third = start("Nobody3#NA1", "1.2.3.4")
+    assert third.status_code == 429 and int(third.headers["retry-after"]) > 0
+    assert start("Alpha#NA1", "1.2.3.4").status_code == 200        # cached players never count
+    assert start("Nobody4#NA1", "5.6.7.8").status_code == 200      # another browser
+    assert start("Nobody5#NA1").status_code == 200                 # the site's own calls
+    for name in ["Nobody1#NA1", "Nobody2#NA1", "Nobody4#NA1", "Nobody5#NA1"]:
+        lookup(client, name)   # joins the job, so nothing is left running for later tests
+
+
+def test_health_needs_no_secret(client, monkeypatch):
+    monkeypatch.setattr(api, "INTERNAL_SECRET", "s3cret")
+    assert client.get("/health").json() == {"ok": True}
+    assert client.get("/api/champions").status_code == 403
+
+
 def test_unknown_player_and_bad_id(client):
     assert lookup(client, "Nobody#NA1")["status"] == "error"
     assert client.post("/api/lookups", json={"riot_id": "no-tag"}).status_code == 400

@@ -2,7 +2,8 @@
 
     uv run uvicorn api:app --app-dir data --port 8000
 
-Env: DUO_INTERNAL_SECRET (required on every request when set; the site sends it), DUO_DB (SQLite path or Postgres URL; else DATABASE_URL, else lol_duo.sqlite), DUO_GAP_TABLE (段位差 JSON from
+Env: DUO_INTERNAL_SECRET (required on every request when set; the site sends it), DUO_LOOKUPS_PER_IP
+(new lookups one browser may start per LOOKUP_WINDOW_SECONDS, default 6; 0 = no limit), DUO_DB (SQLite path or Postgres URL; else DATABASE_URL, else lol_duo.sqlite), DUO_GAP_TABLE (段位差 JSON from
 evaluate.py, default data/rank_gap.json), RIOT_API_KEY via .env. The 搭配评分 scale is read from the
 database (score_scale.py saves it there) and fitted in the background when missing or a day old.
 New players are fetched in a background job whose progress the site polls (PRD §5.2).
@@ -12,6 +13,7 @@ import os
 import threading
 import time
 import uuid
+from collections import defaultdict, deque
 from contextlib import closing
 from pathlib import Path
 
@@ -38,6 +40,12 @@ MAX_DECK = 200     # 牌堆 size cap for one request
 MAX_CANDIDATES = 5000   # 会员 the site may send for one 牌堆
 MAX_EXCLUDE = 200_000   # puuids + Riot IDs of every bound 会员, hidden from the public demo
 JOB_KEEP_SECONDS = 600
+# A new lookup costs up to ~100 Riot calls, about two minutes of the dev key's 100 per 2 minutes, and every
+# visitor shares that key. 6 per 10 minutes is three 查组合 with two new players each, so one visitor (or a
+# script) cannot hold the key for everyone. Only browser requests count: the site marks them with
+# X-Duo-Client-Ip (web/app/api/[...path]); its own server-side calls, like warming a newly bound 会员, do not.
+LOOKUPS_PER_IP = int(os.environ.get("DUO_LOOKUPS_PER_IP", "6"))
+LOOKUP_WINDOW_SECONDS = 600
 # The 自选英雄 picker lists a champion under a position once this share of its Solo/Duo games are there,
 # so Zed shows under 中单 but not under the odd support game. It only filters a list, never a prediction.
 MIN_POSITION_SHARE = 0.1
@@ -51,6 +59,8 @@ INTERNAL_SECRET = os.environ.get("DUO_INTERNAL_SECRET", "")
 
 @app.middleware("http")
 async def require_internal_secret(request: Request, call_next):
+    if request.url.path == "/health":   # Fly's health check carries no secret, and the answer reveals nothing
+        return await call_next(request)
     if INTERNAL_SECRET and not hmac.compare_digest(
             request.headers.get("x-duo-internal", "").encode(), INTERNAL_SECRET.encode()):
         return JSONResponse({"detail": "forbidden"}, status_code=403)
@@ -59,6 +69,7 @@ scale = None   # loaded from the database at startup (refresh_scale)
 last_fit_try = 0
 jobs = {}
 jobs_lock = threading.Lock()
+lookup_starts = defaultdict(deque)   # browser IP -> times it started a new lookup, within LOOKUP_WINDOW_SECONDS
 _client = None
 _client_lock = threading.Lock()
 
@@ -136,6 +147,29 @@ def prune_jobs(now):
         del jobs[job_id]
 
 
+def lookup_wait(ip, now):
+    """Seconds until this browser may start another new lookup, or 0 (and the start is counted). Call
+    under jobs_lock."""
+    if not ip or LOOKUPS_PER_IP <= 0:
+        return 0
+    starts = lookup_starts[ip]
+    while starts and starts[0] <= now - LOOKUP_WINDOW_SECONDS:
+        starts.popleft()
+    if len(starts) >= LOOKUPS_PER_IP:
+        return int(starts[0] + LOOKUP_WINDOW_SECONDS - now) + 1
+    starts.append(now)
+    for other in [k for k, v in lookup_starts.items() if not v or v[-1] <= now - LOOKUP_WINDOW_SECONDS]:
+        del lookup_starts[other]   # keep the table to recent visitors
+    return 0
+
+
+@app.get("/health")
+def health():
+    """For Fly's health check: the process answers. It does not touch the database, so a Neon cold start
+    never gets the machine restarted."""
+    return {"ok": True}
+
+
 def player_summary(p):
     prof = p["profile"]
     return {"riot_id": p["riot_id"], "tier": p["tier"], "division": p["division"],
@@ -203,7 +237,7 @@ class LookupRequest(BaseModel):
 
 
 @app.post("/api/lookups")
-def start_lookup(req: LookupRequest):
+def start_lookup(req: LookupRequest, request: Request):
     try:
         service.parse_riot_id(req.riot_id)
     except ValueError as e:
@@ -218,6 +252,10 @@ def start_lookup(req: LookupRequest):
         running = next((j for j, job in jobs.items() if job["key"] == key and job["status"] == "running"), None)
         if running:   # a second tab or double submit joins the lookup already in flight
             return {"job_id": running}
+        wait = lookup_wait(request.headers.get("x-duo-client-ip"), time.time())
+        if wait:
+            raise HTTPException(429, f"查询新玩家太频繁了，请 {max(1, round(wait / 60))} 分钟后再试",
+                                headers={"Retry-After": str(wait)})
         job_id = uuid.uuid4().hex
         jobs[job_id] = {"status": "running", "stage": "account", "done": 0, "total": 0,
                         "riot_id": req.riot_id, "key": key}

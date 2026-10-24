@@ -29,7 +29,7 @@ export default defineConfig({
   webServer: [
     {
       command: "node web/scripts/start-e2e-api.mjs",
-      env: { DUO_DB: DB, DUO_FAKE_RIOT: "1", DUO_INTERNAL_SECRET: INTERNAL, DATABASE_URL: "" },
+      env: { DUO_DB: DB, DUO_FAKE_RIOT: "1", DUO_LOOKUPS_PER_IP: "0", DUO_INTERNAL_SECRET: INTERNAL, DATABASE_URL: "" },
       cwd: "..",
       url: "http://127.0.0.1:8100/api/champions",
       timeout: 120_000,

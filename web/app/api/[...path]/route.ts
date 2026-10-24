@@ -12,6 +12,12 @@ const PUBLIC: [string, RegExp][] = [
   ["GET", /^players\/[^/]+\/matches$/],
 ];
 
+/** The visitor's IP, for the Python API's per-browser lookup limit. Vercel sets x-forwarded-for itself,
+ * so a browser cannot pick its own; locally it is the dev machine. */
+function clientIp(req: Request) {
+  return req.headers.get("x-forwarded-for")?.split(",")[0].trim() || req.headers.get("x-real-ip") || "local";
+}
+
 async function proxy(req: Request, { params }: { params: Promise<{ path: string[] }> }) {
   const path = (await params).path.map(encodeURIComponent).join("/");
   if (!PUBLIC.some(([m, re]) => m === req.method && re.test(path))) {
@@ -20,7 +26,7 @@ async function proxy(req: Request, { params }: { params: Promise<{ path: string[
   try {
     const res = await pythonFetch(`/api/${path}${new URL(req.url).search}`, {
       method: req.method,
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", "x-duo-client-ip": clientIp(req) },
       body: req.method === "GET" ? undefined : await req.text(),
     });
     return forward(res);
