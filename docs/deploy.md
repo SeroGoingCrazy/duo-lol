@@ -12,6 +12,7 @@ fly deploy
 ```
 
 - `DATABASE_URL` 是 Neon 的连接串（和网站用的同一个）。Python 会自己建 `data` schema 和表；连接串里的 `-pooler` 会被换成直连地址，因为连接池会丢掉 schema 设置。
+- **之后自动部署。** 在电脑上运行 `fly tokens create deploy --app duo-lol-api`，把输出加到 GitHub 仓库的 Settings → Secrets and variables → Actions，名字叫 `FLY_API_TOKEN`。之后每次 `main` 有新代码、CI 通过，`.github/workflows/ci.yml` 的 `deploy-api` 就会自动 `fly deploy`。没设这个 secret 时这一步会跳过，只能手动部署。
 - 不需要磁盘卷。搭配评分的拟合结果存在数据库的 `score_scale` 表里，数据库里没有时 API 在后台拟合，之后每天重拟一次；本地跑 `uv run python data/score_scale.py` 也会写进同一张表，线上一小时内会换成新的。以前建过 `duo_data` 卷的话，先 `fly deploy` 这一版（机器不再挂卷），再用 `fly volumes list` 找到卷的 id、`fly volumes destroy <id>` 删掉。
 - 健康检查：`fly.toml` 让 Fly 每 30 秒访问一次 `/health`，没回应就重启机器。部署完打开 `https://<app 名>.fly.dev/health`，看到 `{"ok":true}` 就说明部署成功。
 - **只开一台机器。** 查询任务存在内存里，开第二台的话，网站轮询到另一台就找不到任务。不要 `fly scale count 2`。
