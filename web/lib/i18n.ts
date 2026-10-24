@@ -14,6 +14,20 @@ export function pickLang(cookie: string | undefined): Lang {
 }
 
 const EN = new Map<string, string>(Object.entries({
+
+  // Two-step onboarding
+  "完成两步，开始找搭子": "Two steps to find your duo",
+  "选择想打的位置": "Choose your roles",
+  "加入推荐池": "Join the recommendation pool",
+  "最多选 2 个位置；不选表示都可以，之后随时能在我的账号修改。": "Choose up to 2 roles, or leave them blank for any role. You can change them any time in My account.",
+  "下一步：加入推荐池": "Next: join the pool",
+  "你的卡片会出现在其他会员的牌堆里，只有双方都喜欢才会互选。你可以随时在我的账号退出推荐池。": "Your card will appear in other members' decks. You match only when you both like each other. You can leave the pool any time in My account.",
+  "上一步": "Back",
+  "暂时不加入，体验演示": "Skip for now and try the demo",
+  "请先同意被推荐，或选择体验演示": "Opt in to recommendations, or choose the demo",
+
+
+
   // Empty states and recovery
   "你已看完当前牌堆，可以重新查找，或先和朋友查组合。": "You have reached the end of this deck. Find again, or check your duo score with a friend.",
   "你的资料还在加载，完成后会自动查找搭子。": "Your profile is still loading. We will find partners when it is ready.",

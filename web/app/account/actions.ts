@@ -15,7 +15,7 @@ import { bioProblem, LANGUAGES, pick, PLAY_TIMES, VOICES, type Voice } from "@/l
 
 const MAX_POSITIONS = 2;
 
-export type ActionState = { error?: string; ok?: string; next?: "/find"; recommendationEnabled?: boolean };
+export type ActionState = { error?: string; ok?: string; next?: "/find" | "/welcome"; recommendationEnabled?: boolean };
 
 async function memberId() {
   const session = await auth();
@@ -60,7 +60,7 @@ export async function bindRiot(_: ActionState, form: FormData): Promise<ActionSt
   await db.insert(schema.memberPrefs).values({ memberId: me }).onConflictDoNothing();
   warmPlayer(account.riot_id);
   revalidatePath("/", "layout");
-  return { ok: "绑定成功" };
+  return { ok: "绑定成功", next: "/welcome" };
 }
 
 /** 解绑: frees the Riot account, say after a typo, and ends their 互选 (releaseRiotAccount).
@@ -110,21 +110,29 @@ export async function savePrefs(_: ActionState, form: FormData): Promise<ActionS
     .from(schema.members).leftJoin(schema.memberPrefs, eq(schema.memberPrefs.memberId, schema.members.id))
     .where(eq(schema.members.id, me));
   if (!member?.boundAt) return { error: "先绑定 Riot 账号" };
+  const intent = form.get("intent");
+  const onboarding = intent === "welcome" || intent === "welcome_demo";
+  if (onboarding && member.suspendedAt) return { error: "你的账号因被举报暂停推荐，等待管理员处理" };
   const positions = form.getAll("positions").map(String).filter((p) => POSITIONS.includes(p));
   if (positions.length > MAX_POSITIONS) return { error: `想打的位置最多选 ${MAX_POSITIONS} 个` };
+  const recommendOptIn = intent !== "welcome_demo" && form.get("recommend_opt_in") === "on";
+  if (intent === "welcome" && !recommendOptIn) return { error: "请先同意被推荐，或选择体验演示" };
   const bio = String(form.get("bio") ?? "").replace(/\s+/g, " ").trim();
   const problem = bioProblem(bio);
-  if (problem) return { error: problem };
+  if (!onboarding && problem) return { error: problem };
   const voice = String(form.get("voice") ?? "");
+  // /welcome only edits roles and consent. Keep optional settings when a member returns later.
   const prefs = {
     positions,
-    bio,
-    languages: pick(form.getAll("languages"), LANGUAGES),
-    voice: (VOICES as readonly string[]).includes(voice) ? (voice as Voice) : null,
-    playTimes: pick(form.getAll("play_times"), PLAY_TIMES),
-    recommendOptIn: form.get("recommend_opt_in") === "on",
-    showDiscord: form.get("show_discord") === "on",
-    notifyDiscord: form.get("notify_discord") === "on",
+    recommendOptIn,
+    ...(!onboarding ? {
+      bio,
+      languages: pick(form.getAll("languages"), LANGUAGES),
+      voice: (VOICES as readonly string[]).includes(voice) ? (voice as Voice) : null,
+      playTimes: pick(form.getAll("play_times"), PLAY_TIMES),
+      showDiscord: form.get("show_discord") === "on",
+      notifyDiscord: form.get("notify_discord") === "on",
+    } : {}),
   };
   await db.insert(schema.memberPrefs).values({ memberId: me, ...prefs })
     .onConflictDoUpdate({ target: schema.memberPrefs.memberId, set: prefs });
@@ -133,7 +141,7 @@ export async function savePrefs(_: ActionState, form: FormData): Promise<ActionS
   return {
     ok: "已保存",
     recommendationEnabled: prefs.recommendOptIn && !member.recommendOptIn,
-    ...(form.get("intent") === "find" && prefs.recommendOptIn && !member.suspendedAt ? { next: "/find" as const } : {}),
+    ...((onboarding || (intent === "find" && prefs.recommendOptIn)) && !member.suspendedAt ? { next: "/find" as const } : {}),
   };
 }
 
