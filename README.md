@@ -2,6 +2,8 @@
 
 A teammate finder for League of Legends players on NA. Check how two players fit together, explore champion combinations, and swipe to find someone to queue with, from match history to a mutual like.
 
+**Live site: [lolduo.com.co](https://lolduo.com.co)**
+
 ![Home page: product introduction with paths to the swipe deck and the free duo check](docs/screenshots/home.png)
 
 *Screenshots show the actual site running locally on synthetic demo data (`data/fake_riot.py`). Players and scores are illustrative.*
@@ -47,7 +49,7 @@ Pair statistics cover any two players on the same team, whether they queued toge
 | Application data | Drizzle ORM; PGlite locally, Postgres in production |
 | Match data and predictions | Python, FastAPI, Riot API; Postgres on Neon (`DATABASE_URL`) or a local SQLite file |
 | Verification | pytest and Playwright |
-| Deployment | Vercel website, Fly.io Python API, Neon Postgres |
+| Deployment | Vercel website ([lolduo.com.co](https://lolduo.com.co)), Fly.io Python API, Neon Postgres |
 
 ## Run locally
 
