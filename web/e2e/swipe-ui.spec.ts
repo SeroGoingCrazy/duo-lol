@@ -94,14 +94,28 @@ for (const [colorScheme, width, height] of [["light", 390, 844], ["dark", 390, 8
     const card = page.getByTestId("swipe-card");
     const cardBox = (await card.boundingBox())!;
     const sidebarBox = (await page.getByTestId("deck-sidebar").boundingBox())!;
-    expect(cardBox.y).toBeLessThan(sidebarBox.y);
+    expect(sidebarBox.y + sidebarBox.height).toBeLessThanOrEqual(cardBox.y);
+    const sidebar = page.getByTestId("deck-sidebar");
+    await expect(sidebar.getByRole("tabpanel")).toBeHidden();
+    await sidebar.getByRole("button", { name: /模拟喜欢/ }).click();
+    await expect(sidebar.getByTestId("likes-list")).toBeVisible();
+    await sidebar.getByRole("button", { name: /模拟喜欢/ }).click();
+    await expect(sidebar.getByRole("tabpanel")).toBeHidden();
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
     await expect(page.getByTestId("demo-simulation-notice")).toBeInViewport({ ratio: 1 });
     await expect(card.getByRole("button", { name: "看英雄组合" })).toBeInViewport();
     await expect(page.getByRole("button", { name: "喜欢", exact: true })).toBeInViewport({ ratio: 1 });
     await expect(page.getByRole("button", { name: "跳过", exact: true })).toBeInViewport({ ratio: 1 });
     await expect(card).toBeInViewport({ ratio: 1 });
-    expect(await card.getByTestId("card-content").evaluate((el) => el.scrollHeight - el.clientHeight)).toBeLessThanOrEqual(1);
+    if (height >= 844) {
+      expect(await card.getByTestId("card-content").evaluate((el) => el.scrollHeight - el.clientHeight)).toBeLessThanOrEqual(1);
+    } else {
+      // On shorter screens, supplemental champion history scrolls inside the card;
+      // the card and all action buttons still fit without scrolling the page.
+      await card.getByTestId("card-content").evaluate((el) => { el.scrollTop = el.scrollHeight; });
+      await expect(card.getByTestId("card-games")).toBeInViewport({ ratio: 1 });
+      expect(await page.evaluate(() => window.scrollY)).toBe(0);
+    }
     await page.screenshot({ path: `test-results/swipe-mobile-${colorScheme}-${width}x${height}.png`, fullPage: true });
     await page.getByRole("button", { name: "跳过", exact: true }).click();
     await expect(card.getByTestId("score")).toHaveText("42分");
@@ -131,11 +145,15 @@ test("touch swipe and touch cancellation preserve the deck", async ({ browser })
 });
 
 test("desktop card has a readable width and a secondary sidebar", async ({ page }) => {
-  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.setViewportSize({ width: 1280, height: 900 });
   await openDeck(page);
   const cardBox = (await page.getByTestId("swipe-card").boundingBox())!;
   const sidebarBox = (await page.getByTestId("deck-sidebar").boundingBox())!;
   expect(cardBox.width).toBeLessThanOrEqual(500);
   expect(sidebarBox.x).toBeGreaterThan(cardBox.x + cardBox.width);
+  await expect(page.getByTestId("swipe-card")).toBeInViewport({ ratio: 1 });
+  for (const name of ["撤销上一次跳过", "跳过", "喜欢"]) {
+    await expect(page.getByRole("button", { name, exact: true })).toBeInViewport({ ratio: 1 });
+  }
   await page.screenshot({ path: "test-results/swipe-desktop.png", fullPage: true });
 });

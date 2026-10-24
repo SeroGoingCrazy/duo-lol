@@ -16,7 +16,7 @@ export default function PairResultView({ r, shareable = true }: { r: PairResult;
   const up = r.win_rate_delta >= 0;
   return (
     <div className="grid gap-4 xl:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] xl:items-start" data-testid="pair-result">
-      <Card>
+      <Card className="glass neon-ring">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <div className="mb-2 flex items-center gap-1.5 text-sm text-muted-foreground">{t("搭配评分")} <ScoreHelp /></div>

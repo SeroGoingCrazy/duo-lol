@@ -18,12 +18,39 @@ test("会员 滑卡: 喜欢 back makes a 互选, only then the Riot ID shows", a
   const firstCard = alice.getByTestId("swipe-card");
   await expect(firstCard.getByTestId("avatar")).toBeVisible();
   await expect(firstCard.getByTestId("card-games")).toContainText(/\d+ 场单双排/);
+  await alice.setViewportSize({ width: 1280, height: 900 });
+  await alice.evaluate(() => window.scrollTo(0, 0));
+  await expect(firstCard).toBeInViewport({ ratio: 1 });
+  for (const name of ["撤销上一次跳过", "跳过", "喜欢"]) {
+    await expect(alice.getByTestId("gamepad").getByRole("button", { name, exact: true })).toBeInViewport({ ratio: 1 });
+  }
+  await alice.screenshot({ path: "test-results/member-desktop-1280x900.png", fullPage: true });
   for (const [width, height] of [[375, 667], [390, 844]]) {
     await alice.setViewportSize({ width, height });
     await alice.evaluate(() => window.scrollTo(0, 0));
     await expect(firstCard).toBeInViewport({ ratio: 1 });
     await expect(alice.getByRole("button", { name: "喜欢", exact: true })).toBeInViewport({ ratio: 1 });
     await expect(alice.getByRole("button", { name: "跳过", exact: true })).toBeInViewport({ ratio: 1 });
+    await expect(alice.getByRole("button", { name: "撤销上一次跳过", exact: true })).toBeInViewport({ ratio: 1 });
+    if (width === 390) {
+      const sidebar = alice.getByTestId("deck-sidebar");
+      const chips = sidebar.getByTestId("deck-counts");
+      const panel = sidebar.locator('[role="tabpanel"]');
+      await expect(chips).toBeInViewport({ ratio: 1 });
+      await expect(panel).toBeHidden();
+      const chipBounds = await chips.boundingBox();
+      const cardBounds = await firstCard.boundingBox();
+      expect(chipBounds!.y + chipBounds!.height).toBeLessThanOrEqual(cardBounds!.y);
+      for (const name of [/^互选\s+0$/, /^喜欢我的人\s+0$/]) {
+        const chip = chips.getByRole("button", { name });
+        await chip.click();
+        await expect(chip).toHaveAttribute("aria-expanded", "true");
+        await expect(panel).toBeVisible();
+        await chip.click();
+        await expect(chip).toHaveAttribute("aria-expanded", "false");
+        await expect(panel).toBeHidden();
+      }
+    }
     await alice.screenshot({ path: `test-results/member-mobile-${width}x${height}.png`, fullPage: true });
   }
   await alice.setViewportSize({ width: 1280, height: 900 });

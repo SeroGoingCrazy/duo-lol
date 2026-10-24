@@ -20,7 +20,7 @@ type DemoFailure =
 const asCard = (p: Partner): DeckCard => ({ ...p, id: cardKey(p) });
 
 /** 找搭子 演示版 (ADR-0008) for visitors who are not yet swiping as a 会员: swipes stay in this browser. */
-export default function DemoDeck({ notice }: { notice: React.ReactNode }) {
+export default function DemoDeck({ notice, member = false }: { notice: React.ReactNode; member?: boolean }) {
   const info = useChampionInfo();
   const t = useT();
   const [me, setMe] = useState("");
@@ -147,23 +147,18 @@ export default function DemoDeck({ notice }: { notice: React.ReactNode }) {
 
   return (
     <div className="mx-auto max-w-6xl">
-      <div className={`${partners ? "mb-2 sm:mb-6" : "mb-6"} flex flex-wrap items-end justify-between gap-2`}>
+      <div className={`${partners ? "mb-2 sm:mb-3" : "mb-6"} flex flex-wrap items-end justify-between gap-2`}>
         <div>
-          <div className={`${partners ? "hidden sm:flex" : "flex"} mb-2 items-center gap-1.5 text-xs font-medium text-primary`}><Sparkles className="size-3.5" />{t("找到合拍的下一局")}</div>
+          {!member && !partners && <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-primary"><Sparkles className="size-3.5" />{t("找到合拍的下一局")}</div>}
           <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{t("找搭子")}</h1>
-          <p className={`${partners ? "hidden sm:block" : ""} mt-2 text-sm text-muted-foreground`}>{t("看看搭配，选个队友。右滑喜欢，左滑跳过。")}</p>
+          {!member && !partners && <p className="mt-2 text-sm text-muted-foreground">{t("看看搭配，选个队友。右滑喜欢，左滑跳过。")}</p>}
         </div>
         {partners && <span className="rounded-full border bg-card px-3 py-1.5 text-xs text-muted-foreground">{t("美服 · 单双排")} <span className="mx-1 text-border">/</span> {t("演示版")}</span>}
       </div>
 
-      {/* The full onboarding notice collapses once loaded; the simulation warning stays in view. */}
-      <Alert className={`${partners ? "hidden sm:flex" : ""} mb-3 sm:mb-6`} data-testid="demo-notice">{notice}</Alert>
-      {partners && <p className="mb-2 rounded-lg border border-primary/25 bg-primary/5 px-3 py-1.5 text-xs font-medium" data-testid="demo-simulation-notice">
-        {t.lang === "zh" ? "演示：喜欢和互选均为模拟，不会通知对方。" : "Demo: likes and matches are simulated. Nobody is notified."}
-      </p>}
-
-      <details open={partners ? undefined : true} className="mb-2 rounded-2xl border bg-card px-3 py-2 sm:mb-6 sm:p-4" key={partners ? "loaded" : "search"}>
-        <summary className="cursor-pointer text-sm font-medium">{partners ? <><span className="text-muted-foreground">{t("当前玩家")}</span> <span className="mx-2">{deckOwner}</span><span className="text-xs text-primary">{t("更换玩家")}</span></> : t("从你的 Riot ID 开始")}</summary>
+      <details open={partners ? undefined : true} className="mb-2 rounded-2xl border bg-card px-3 py-2 sm:mb-3" key={partners ? "loaded" : "search"}>
+        <summary className="cursor-pointer text-sm font-medium">{partners ? <><span className="text-muted-foreground">{t("当前玩家")}</span> <span className="mx-2">{deckOwner}</span><span className="text-xs text-primary">{t("更换玩家")}</span><span className="mt-1 block text-xs text-muted-foreground" data-testid="demo-simulation-notice">{t("演示：喜欢和互选均为模拟，不会通知对方。")}</span></> : t("从你的 Riot ID 开始")}</summary>
+        <p className="mt-3 text-sm text-muted-foreground" data-testid="demo-notice">{notice}</p>
         <form className="mt-3 flex flex-wrap items-start gap-3" onSubmit={(e) => { e.preventDefault(); if (ready && !busy) search(me); }}>
           <RiotIdField label={t("你的 Riot ID")} placeholder="Name#NA1" value={me} onChange={changeId} />
           <Button className="mt-5 w-full sm:w-auto" disabled={busy || !ready}>{t("开始滑卡")}</Button>

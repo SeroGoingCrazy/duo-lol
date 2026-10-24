@@ -7,7 +7,7 @@ export default async function SiteFooter() {
   const t = await getT();
   const link = "text-muted-foreground no-underline transition-colors hover:text-foreground";
   return (
-    <footer className="glass mt-auto border-t border-border/60" data-testid="footer">
+    <footer className="mt-auto border-t border-border/60" data-testid="footer">
       <div className="mx-auto grid w-full max-w-[96rem] gap-8 px-4 py-10 text-sm sm:px-6 md:grid-cols-[3fr_1fr] lg:px-10">
         <div className="space-y-2">
           <p className="text-base font-bold tracking-tight"><span className="text-neon">{t("匹配搭子")}</span></p>

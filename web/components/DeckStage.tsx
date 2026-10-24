@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { ArrowLeft, ArrowRight, Heart, RotateCcw, X } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
 import CopyButton from "@/components/CopyButton";
@@ -38,7 +38,7 @@ export default function DeckStage({ remaining, total, mutual, likes, info, canUn
   const cardArea = useRef<HTMLDivElement>(null);
   const visibleCard = useRef<HTMLDivElement>(null);
   const firstCardViewed = useRef(false);
-  const [mobileHeight, setMobileHeight] = useState<number | undefined>();
+  const [cardTop, setCardTop] = useState<number>();
   const likeIds = new Set(likes.map((c) => c.id));
   const top = (focus && remaining.find((c) => c.id === focus)) || remaining[0] || null;
   const behind = remaining.find((c) => c !== top) ?? null;
@@ -68,19 +68,18 @@ export default function DeckStage({ remaining, total, mutual, likes, info, canUn
     };
   }, [top?.id, demo, paused, matched]);
 
-  // Size the initial mobile card around the real header, leaving the entire action row visible.
+  // Reserve the real header and controls; dvh also follows mobile browser chrome.
   // Use document coordinates so scrolling does not resize the card under a finger.
   useEffect(() => {
     const area = cardArea.current;
     if (!area) return;
     const fit = () => {
-      if (window.innerWidth >= 640) { setMobileHeight(undefined); return; }
       const top = area.getBoundingClientRect().top + window.scrollY;
-      setMobileHeight(Math.max(304, Math.min(440, window.innerHeight - top - 86)));
+      setCardTop(top);
     };
     fit();
     const observer = new ResizeObserver(fit);
-    observer.observe(area.parentElement!);
+    observer.observe(area.parentElement!.parentElement!);
     window.addEventListener("resize", fit);
     return () => { observer.disconnect(); window.removeEventListener("resize", fit); };
   }, []);
@@ -115,13 +114,14 @@ export default function DeckStage({ remaining, total, mutual, likes, info, canUn
 
   return (
     <>
-      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start" data-testid="deck">
+      <div className="grid gap-2 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start lg:gap-8" data-testid="deck">
         <div className="swipe-stage min-w-0 rounded-3xl px-1 pb-3 pt-2 sm:px-6 sm:pb-5 sm:pt-4">
           <div className="mx-auto mb-2 flex max-w-[30rem] items-center justify-between px-1 text-xs text-muted-foreground sm:mb-4">
             <span className="font-medium text-foreground">{t("为你推荐")} <span className="ml-2 font-normal text-muted-foreground">{t("按预测胜率排序")}</span></span>
             <span aria-live="polite">{t("剩余 {n} / {total}", { n: remaining.length, total })}</span>
           </div>
-          <div ref={cardArea} className="relative mx-auto h-[26rem] max-w-[30rem] sm:h-[35rem]" style={{ height: mobileHeight }}>
+          <div ref={cardArea} className="relative mx-auto h-[clamp(19rem,calc(100dvh-var(--deck-top,16rem)-8rem),35rem)] max-w-[30rem] sm:h-[clamp(19rem,calc(100dvh-var(--deck-top,16rem)-10rem),35rem)]"
+            style={{ "--deck-top": cardTop == null ? undefined : `${cardTop}px` } as CSSProperties}>
             {top ? (
               <>
                 {behind && <><div className="absolute inset-x-6 inset-y-0 translate-y-4 rounded-3xl border bg-card opacity-40" aria-hidden /><div className="absolute inset-x-3 inset-y-0 translate-y-2 rounded-3xl border bg-card opacity-80" aria-hidden /></>}
@@ -134,7 +134,7 @@ export default function DeckStage({ remaining, total, mutual, likes, info, canUn
             )}
           </div>
 
-          <div className="mt-3 flex items-end justify-center gap-7 sm:mt-7" data-testid="gamepad">
+          <div className="sticky bottom-0 z-10 mt-3 flex items-end justify-center gap-7 bg-background/95 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:static sm:mt-5 sm:bg-transparent sm:py-0" data-testid="gamepad">
             <div className="flex flex-col items-center gap-1 sm:gap-2">
             <Button variant="outline" className="size-10 rounded-full bg-card p-0 text-muted-foreground sm:size-12" aria-label={t("撤销上一次跳过")} disabled={!canUndo || !!fling} onClick={undo}>
               <RotateCcw className="size-5!" />
@@ -157,7 +157,7 @@ export default function DeckStage({ remaining, total, mutual, likes, info, canUn
           <p className="mt-3 hidden items-center justify-center gap-2 text-[11px] text-muted-foreground sm:flex"><ArrowLeft className="size-3" /> {t("左滑跳过")} <span className="mx-1">·</span> {t("右滑喜欢")} <ArrowRight className="size-3" /><span>{t("，也可使用方向键")}</span></p>
           {top && cardActions && <div className="mt-2 flex justify-center gap-1">{cardActions(top)}</div>}
         </div>
-        <DeckSidebar className="max-h-96 lg:mt-12 lg:max-h-[35rem]" mutual={mutual} likes={likes} disabled={!!fling} demo={demo}
+        <DeckSidebar className="order-first max-h-96 lg:order-last lg:mt-12 lg:max-h-[35rem]" mutual={mutual} likes={likes} disabled={!!fling} demo={demo}
           onOpen={(c) => { if (!fling) setFocus(c.id); }} actions={mutualActions} />
       </div>
 
@@ -165,7 +165,7 @@ export default function DeckStage({ remaining, total, mutual, likes, info, canUn
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-labelledby="match-title" data-testid="match-dialog">
           <motion.div className="w-full max-w-sm" initial={still ? false : { opacity: 0, scale: 0.85 }} animate={{ opacity: 1, scale: 1 }}
             transition={{ type: "spring", stiffness: 320, damping: 22 }}>
-          <Card className="space-y-4 text-center shadow-[0_0_80px_-10px_var(--neon-a)]">
+          <Card className="space-y-4 text-center">
             <h2 id="match-title" className="text-neon text-3xl font-black italic">{demo ? (t.lang === "zh" ? "模拟互选" : "Demo match") : t("互选成功")}</h2>
             <p className="text-sm text-muted-foreground">{demo
               ? (t.lang === "zh" ? "这是演示效果，对方没有向你表达喜欢，也不会收到通知。注册并加入推荐池后才能与会员真实互选。" : "This is a simulation. This player has not liked you and receives no notification. Join the member pool to make real matches.")

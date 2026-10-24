@@ -14,6 +14,7 @@ export function pickLang(cookie: string | undefined): Lang {
 }
 
 const EN = new Map<string, string>(Object.entries({
+  "模拟互选": "Demo match",
 
   // Two-step onboarding
   "完成两步，开始找搭子": "Two steps to find your duo",
@@ -28,6 +29,8 @@ const EN = new Map<string, string>(Object.entries({
 
 
 
+  "演示：喜欢和互选均为模拟，不会通知对方。": "Demo: likes and matches are simulated. Nobody is notified.",
+  "模拟喜欢": "Simulated likes",
   // Empty states and recovery
   "你已看完当前牌堆，可以重新查找，或先和朋友查组合。": "You have reached the end of this deck. Find again, or check your duo score with a friend.",
   "你的资料还在加载，完成后会自动查找搭子。": "Your profile is still loading. We will find partners when it is ready.",
