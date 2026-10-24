@@ -18,7 +18,11 @@ test("中文 by default even in an English browser; the switch picks English and
   await page.getByLabel("Player B").fill("Bravo#NA1");
   await page.getByRole("button", { name: "Predict" }).click();
   const result = page.getByTestId("pair-result");
-  await expect(result).toContainText("Predicted win rate", { timeout: 60_000 });
+  await expect(result).toBeVisible({ timeout: 60_000 });
+  await expect(result).toContainText(/Top \d+%|Better than nearly all/);
+  await expect(result.getByTestId("win-rate")).toBeHidden();
+  await result.getByTestId("score-calculation").locator("summary").click();
+  await expect(result.getByTestId("win-rate")).toBeVisible();
   await expect(result).toContainText(/(above|below) your solo average/);
   await expect(page.getByTestId("roles")).toContainText(/Top|Jungle|Mid|Bot|Support/);
   await expect(page.getByTestId("footer")).toContainText("not a skill, rank or MMR rating");
@@ -39,6 +43,8 @@ test("English demo deck: card text and the model's reasons", async ({ page }) =>
   await card.getByRole("button", { name: "Reason" }).click();
   const reasons = page.getByTestId("reasons");
   await expect(reasons).toContainText("Roles:");
+  await expect(reasons).toContainText("percentage points");
+  await expect(reasons).not.toContainText("个百分点");
   await expect(reasons).not.toContainText("位置组合");
   await expect(page.getByRole("button", { name: "Like", exact: true })).toBeVisible();
 });

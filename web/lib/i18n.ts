@@ -27,6 +27,13 @@ const EN = new Map<string, string>(Object.entries({
   "暂时不加入，体验演示": "Skip for now and try the demo",
   "请先同意被推荐，或选择体验演示": "Opt in to recommendations, or choose the demo",
 
+  // Percentile score explanation
+  "搭配评分（百分位）": "Duo score (percentile)",
+  "怎么算的": "How it is calculated",
+  "在可双排组合里排前 {n}%": "Top {n}% of pairs who can queue together",
+  "在{roles}组合里排前 {n}%": "Top {n}% of {roles} pairs",
+  "超过几乎所有可双排组合": "Better than nearly all pairs who can queue together",
+  "超过几乎所有{roles}组合": "Better than nearly all {roles} pairs",
 
 
   "演示：喜欢和互选均为模拟，不会通知对方。": "Demo: likes and matches are simulated. Nobody is notified.",
@@ -410,11 +417,11 @@ const PATTERNS: [RegExp, string][] = [
   [/^(.+) 本赛季未定级，按(.+)估算$/, "$1 is unranked this season, scored as $2"],
   [/^(.+) 数据不足，按自选英雄在(.+)的全服胜率估算$/, "$1 has too few games, scored from picked champions' win rates in $2"],
   [/^位置组合：(\S+) \+ (\S+) 是 (\d+) 种可行分配里预测胜率最高的$/, "Roles: $1 + $2 has the best predicted win rate of $3 possible splits"],
-  [/^熟练度：(.+) 贡献 (\S+) 分，(.+) 贡献 (\S+) 分$/, "Proficiency: $1 adds $2, $3 adds $4"],
-  [/^组合加成：(.+) \+ (.+) (\S+) 分（全服 (\d+) 局样本）$/, "Synergy: $1 + $2 $3 ($4 games)"],
+  [/^熟练度：(.+) 对预测胜率的影响约 (\S+) 个百分点，(.+) 约 (\S+) 个百分点（各自与不计该项相比）$/, "Proficiency: $1 changes predicted win rate by about $2 percentage points, $3 by about $4 (each compared with omitting that factor)"],
+  [/^组合加成：(.+) \+ (.+) 对预测胜率的影响约 (\S+) 个百分点（与不计该项相比；全服 (\d+) 局样本）$/, "Synergy: $1 + $2 changes predicted win rate by about $3 percentage points compared with omitting synergy ($4 games)"],
   [/^段位差：两人同段位$/, "Rank gap: same tier"],
-  [/^段位差：相差 (\d+) 个大段，修正项尚未用数据拟合，暂不计入$/, "Rank gap: $1 tiers apart; not fitted to data yet, so not counted"],
-  [/^段位差：相差 (\d+) 个大段，修正 (\S+) 分$/, "Rank gap: $1 tiers apart, $2"],
+  [/^段位差：相差 (\d+) 个大段$/, "Rank gap: $1 tiers apart"],
+  [/^段位差：相差 (\d+) 个大段，对预测胜率的影响约 (\S+) 个百分点（与不计该项相比）$/, "Rank gap: $1 tiers apart, changing predicted win rate by about $2 percentage points compared with omitting the rank gap"],
 ];
 
 const EN_POSITIONS: Record<string, string> = { TOP: "Top", JUNGLE: "Jungle", MIDDLE: "Mid", BOTTOM: "Bot", UTILITY: "Support" };

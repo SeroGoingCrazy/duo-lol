@@ -130,7 +130,7 @@ test("touch swipe and touch cancellation preserve the deck", async ({ browser })
   const box = (await card.boundingBox())!;
   const session = await context.newCDPSession(page);
   const x = box.x + box.width * 0.65;
-  const y = box.y + 220;
+  const y = box.y + 80; // drag the header, away from the calculation disclosure
   await session.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x, y }] });
   await session.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x: x - 60, y }] });
   await session.send("Input.dispatchTouchEvent", { type: "touchCancel", touchPoints: [] });

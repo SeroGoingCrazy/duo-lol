@@ -5,7 +5,7 @@ import ChampionIcon from "@/components/ChampionIcon";
 import ChampionPairTable from "@/components/ChampionPairTable";
 import PositionIcon from "@/components/PositionIcon";
 import { Avatar } from "@/components/ProfileIconPicker";
-import ScoreBadge, { ScoreHelp, scoreSummary } from "@/components/ScoreBadge";
+import ScoreBadge, { ScoreCalculation, ScoreHelp, scoreSummary } from "@/components/ScoreBadge";
 import { Badge } from "@/components/ui/badge";
 import { CardTitle } from "@/components/ui/card";
 import { useT } from "@/components/LangProvider";
@@ -46,7 +46,6 @@ export default function SwipeCard({ p, info, fling, onSwiped, onSwipeStart, like
   const committed = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const card = useRef<HTMLDivElement>(null);
-  const up = p.win_rate_delta >= 0;
   const t = useT();
 
   function leave(s: Swipe) {
@@ -170,16 +169,12 @@ export default function SwipeCard({ p, info, fling, onSwiped, onSwipeStart, like
           <>
             <div className="flex items-center justify-between gap-3">
               <div>
-                <div className="mb-1 flex items-center gap-1.5 text-xs text-muted-foreground sm:text-sm">{t("搭配评分")} <ScoreHelp /></div>
+                <div className="mb-1 flex items-center gap-1.5 text-xs text-muted-foreground sm:text-sm">{t("搭配评分（百分位）")} <ScoreHelp /></div>
                 <div className="[&_[aria-label]]:text-4xl sm:[&_[aria-label]]:text-7xl"><ScoreBadge score={p.score} /></div>
                 {p.score != null && <div className="mt-1 text-[11px] text-muted-foreground sm:mt-2 sm:text-xs">{scoreSummary({ ...p, score: p.score }, t)}</div>}
               </div>
-              <div className="text-right">
-                <div className="text-xs text-muted-foreground">{t("预测胜率")}</div>
-                <div className="win-rate text-xl font-semibold tabular-nums sm:text-2xl">{t.pct(p.win_rate)}</div>
-                <div className={cn("mt-1 max-w-36 text-xs", up ? "text-good" : "text-bad")}>{t(up ? "比单排基线平均高" : "比单排基线平均低")}<br />{t.points(p.win_rate_delta)}</div>
-              </div>
             </div>
+            <ScoreCalculation prediction={p} />
             <div className="mt-2 grid grid-cols-2 gap-2 sm:mt-5 sm:gap-3" data-testid="card-roles">
               {([[t("你打"), p.roles.a], [t("TA 打"), p.roles.b]] as const).map(([who, role]) => (
                 <div key={who} className="flex min-w-0 items-center justify-between gap-2 rounded-xl bg-muted/70 px-2 py-1 sm:block sm:p-3">
