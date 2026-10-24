@@ -18,7 +18,8 @@ export const { handlers: { GET, POST }, auth, signIn, signOut } = NextAuth(async
     providers: [
       // name is the Discord username, the handle other players add as a friend after 互选
       // scope "identify" only: no email, guilds or friends (see the privacy page)
-      Discord({ authorization: { params: { scope: "identify" } }, profile: (p) => ({ id: p.id, name: p.username, email: null, image: null }) }),
+      // issuer: Discord now sends iss on the callback, and Auth.js rejects it unless it matches
+      Discord({ issuer: "https://discord.com", authorization:{ params: { scope: "identify" } }, profile: (p) => ({ id: p.id, name: p.username, email: null, image: null }) }),
     ],
     session: { strategy: "database" },
     trustHost: true,
