@@ -35,7 +35,7 @@ export default function Nav({ member }: { member: { name: string; admin?: boolea
   );
   return (
     <nav className={cn("flex flex-wrap items-center gap-1", path === "/find" ? "mb-3 sm:mb-6" : "mb-6")}>
-      <a href="/" className="text-neon mr-3 font-black italic tracking-tight no-underline">{t("匹配搭子")}</a>
+      <a href="/" className="text-neon mr-3 font-bold tracking-tight no-underline">{t("匹配搭子")}</a>
       {item("/#duo-check", t("查组合"))}
       {item("/find", t("找搭子"), path === "/find" ? 0 : unseen)}
       <div className="ml-auto flex items-center gap-1">

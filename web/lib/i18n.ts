@@ -35,6 +35,8 @@ const EN = new Map<string, string>(Object.entries({
   "超过几乎所有可双排组合": "Better than nearly all pairs who can queue together",
   "超过几乎所有{roles}组合": "Better than nearly all {roles} pairs",
 
+  // Riot legal notice is retained in its original English wording in both languages.
+  "LoL Duo Finder (英雄联盟匹配搭子) isn't endorsed by Riot Games and doesn't reflect the views or opinions of Riot Games or anyone officially involved in producing or managing Riot Games properties. Riot Games, and all associated properties are trademarks or registered trademarks of Riot Games, Inc.": "LoL Duo Finder (英雄联盟匹配搭子) isn't endorsed by Riot Games and doesn't reflect the views or opinions of Riot Games or anyone officially involved in producing or managing Riot Games properties. Riot Games, and all associated properties are trademarks or registered trademarks of Riot Games, Inc.",
 
   "演示：喜欢和互选均为模拟，不会通知对方。": "Demo: likes and matches are simulated. Nobody is notified.",
   "模拟喜欢": "Simulated likes",

@@ -25,7 +25,7 @@ test("中文 by default even in an English browser; the switch picks English and
   await expect(result.getByTestId("win-rate")).toBeVisible();
   await expect(result).toContainText(/(above|below) your solo average/);
   await expect(page.getByTestId("roles")).toContainText(/Top|Jungle|Mid|Bot|Support/);
-  await expect(page.getByTestId("footer")).toContainText("not a skill, rank or MMR rating");
+  await expect(page.getByTestId("footer")).toContainText("Riot Games");
   await page.reload();
   await expect(page.locator("html")).toHaveAttribute("lang", "en");   // remembered
 

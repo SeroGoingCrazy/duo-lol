@@ -166,7 +166,7 @@ export default function DeckStage({ remaining, total, mutual, likes, info, canUn
           <motion.div className="w-full max-w-sm" initial={still ? false : { opacity: 0, scale: 0.85 }} animate={{ opacity: 1, scale: 1 }}
             transition={{ type: "spring", stiffness: 320, damping: 22 }}>
           <Card className="space-y-4 text-center">
-            <h2 id="match-title" className="text-neon text-3xl font-black italic">{demo ? (t.lang === "zh" ? "模拟互选" : "Demo match") : t("互选成功")}</h2>
+            <h2 id="match-title" className="text-neon text-3xl font-bold">{demo ? (t.lang === "zh" ? "模拟互选" : "Demo match") : t("互选成功")}</h2>
             <p className="text-sm text-muted-foreground">{demo
               ? (t.lang === "zh" ? "这是演示效果，对方没有向你表达喜欢，也不会收到通知。注册并加入推荐池后才能与会员真实互选。" : "This is a simulation. This player has not liked you and receives no notification. Join the member pool to make real matches.")
               : t("你们互相喜欢了。在游戏客户端里加对方好友，一起排位吧。")}</p>
