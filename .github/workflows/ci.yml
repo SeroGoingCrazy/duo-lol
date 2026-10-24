@@ -45,3 +45,21 @@ jobs:
         with:
           name: playwright-results
           path: web/test-results
+
+  # After the tests pass on main, ship the Python API to Fly (docs/deploy.md §1). The website deploys
+  # itself through Vercel's Git integration. Skipped until the FLY_API_TOKEN repo secret is set.
+  deploy-api:
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency: deploy-api   # one deploy at a time; a newer push waits for the running one
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        if: env.FLY_API_TOKEN != ''
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+        if: env.FLY_API_TOKEN != ''
+      - run: flyctl deploy --remote-only --app duo-lol-api
+        if: env.FLY_API_TOKEN != ''
