@@ -14,6 +14,36 @@ export function pickLang(cookie: string | undefined): Lang {
 }
 
 const EN = new Map<string, string>(Object.entries({
+  // Deck exhaustion and dialog controls
+  "还剩 {n} 张卡片": "{n} cards left",
+  "关闭": "Close",
+  "模拟互选": "Demo match",
+  "这是演示效果，对方没有向你表达喜欢，也不会收到通知。注册并加入推荐池后才能与会员真实互选。": "This is a simulation. This player has not liked you and receives no notification. Join the member pool to make real matches.",
+
+  // Two-step onboarding
+  "完成两步，开始找搭子": "Two steps to find your duo",
+  "选择想打的位置": "Choose your roles",
+  "加入推荐池": "Join the recommendation pool",
+  "最多选 2 个位置；不选表示都可以，之后随时能在我的账号修改。": "Choose up to 2 roles, or leave them blank for any role. You can change them any time in My account.",
+  "下一步：加入推荐池": "Next: join the pool",
+  "你的卡片会出现在其他会员的牌堆里，只有双方都喜欢才会互选。你可以随时在我的账号退出推荐池。": "Your card will appear in other members' decks. You match only when you both like each other. You can leave the pool any time in My account.",
+  "上一步": "Back",
+  "暂时不加入，体验演示": "Skip for now and try the demo",
+  "请先同意被推荐，或选择体验演示": "Opt in to recommendations, or choose the demo",
+
+  // Percentile score explanation
+  "搭配评分（百分位）": "Duo score (percentile)",
+  "怎么算的": "How it is calculated",
+  "在可双排组合里排前 {n}%": "Top {n}% of pairs who can queue together",
+  "在{roles}组合里排前 {n}%": "Top {n}% of {roles} pairs",
+  "超过几乎所有可双排组合": "Better than nearly all pairs who can queue together",
+  "超过几乎所有{roles}组合": "Better than nearly all {roles} pairs",
+
+  // Riot legal notice is retained in its original English wording in both languages.
+  "LoL Duo Finder (英雄联盟匹配搭子) isn't endorsed by Riot Games and doesn't reflect the views or opinions of Riot Games or anyone officially involved in producing or managing Riot Games properties. Riot Games, and all associated properties are trademarks or registered trademarks of Riot Games, Inc.": "LoL Duo Finder (英雄联盟匹配搭子) isn't endorsed by Riot Games and doesn't reflect the views or opinions of Riot Games or anyone officially involved in producing or managing Riot Games properties. Riot Games, and all associated properties are trademarks or registered trademarks of Riot Games, Inc.",
+
+  "演示：喜欢和互选均为模拟，不会通知对方。": "Demo: likes and matches are simulated. Nobody is notified.",
+  "模拟喜欢": "Simulated likes",
   // Empty states and recovery
   "你已看完当前牌堆，可以重新查找，或先和朋友查组合。": "You have reached the end of this deck. Find again, or check your duo score with a friend.",
   "你的资料还在加载，完成后会自动查找搭子。": "Your profile is still loading. We will find partners when it is ready.",
@@ -393,11 +423,11 @@ const PATTERNS: [RegExp, string][] = [
   [/^(.+) 本赛季未定级，按(.+)估算$/, "$1 is unranked this season, scored as $2"],
   [/^(.+) 数据不足，按自选英雄在(.+)的全服胜率估算$/, "$1 has too few games, scored from picked champions' win rates in $2"],
   [/^位置组合：(\S+) \+ (\S+) 是 (\d+) 种可行分配里预测胜率最高的$/, "Roles: $1 + $2 has the best predicted win rate of $3 possible splits"],
-  [/^熟练度：(.+) 贡献 (\S+) 分，(.+) 贡献 (\S+) 分$/, "Proficiency: $1 adds $2, $3 adds $4"],
-  [/^组合加成：(.+) \+ (.+) (\S+) 分（全服 (\d+) 局样本）$/, "Synergy: $1 + $2 $3 ($4 games)"],
+  [/^熟练度：(.+) 对预测胜率的影响约 (\S+) 个百分点，(.+) 约 (\S+) 个百分点（各自与不计该项相比）$/, "Proficiency: $1 changes predicted win rate by about $2 percentage points, $3 by about $4 (each compared with omitting that factor)"],
+  [/^组合加成：(.+) \+ (.+) 对预测胜率的影响约 (\S+) 个百分点（与不计该项相比；全服 (\d+) 局样本）$/, "Synergy: $1 + $2 changes predicted win rate by about $3 percentage points compared with omitting synergy ($4 games)"],
   [/^段位差：两人同段位$/, "Rank gap: same tier"],
-  [/^段位差：相差 (\d+) 个大段，修正项尚未用数据拟合，暂不计入$/, "Rank gap: $1 tiers apart; not fitted to data yet, so not counted"],
-  [/^段位差：相差 (\d+) 个大段，修正 (\S+) 分$/, "Rank gap: $1 tiers apart, $2"],
+  [/^段位差：相差 (\d+) 个大段$/, "Rank gap: $1 tiers apart"],
+  [/^段位差：相差 (\d+) 个大段，对预测胜率的影响约 (\S+) 个百分点（与不计该项相比）$/, "Rank gap: $1 tiers apart, changing predicted win rate by about $2 percentage points compared with omitting the rank gap"],
 ];
 
 const EN_POSITIONS: Record<string, string> = { TOP: "Top", JUNGLE: "Jungle", MIDDLE: "Mid", BOTTOM: "Bot", UTILITY: "Support" };

@@ -93,7 +93,8 @@
       var(--background);
     background-attachment: fixed;
   }
-  h1 { font-style: italic; font-weight: 900; letter-spacing: -0.02em; }
+  /* Use the available 700 face; CJK system fallbacks should stay upright. */
+  h1 { font-style: normal; font-weight: 700; letter-spacing: -0.02em; }
   a { color: var(--primary); }
 }
 

@@ -35,7 +35,10 @@ test("查组合: first lookup shows progress, cached lookup is fast", async ({ p
   await page.getByLabel("玩家 B").fill("Bravo#NA1");
   await page.getByRole("button", { name: "预测" }).click();
   await expect(page.getByTestId("progress")).toBeVisible();
-  await expect(page.getByTestId("win-rate")).toBeVisible({ timeout: 45_000 });
+  await expect(page.getByTestId("pair-result")).toBeVisible({ timeout: 45_000 });
+  await expect(page.getByTestId("win-rate")).toBeHidden();
+  await page.getByTestId("score-calculation").locator("summary").click();
+  await expect(page.getByTestId("win-rate")).toBeVisible();
   await expect(page.getByTestId("win-rate")).toHaveText(/\d+\.\d%/);
   await expect(page.getByTestId("score")).toHaveText(/^\d{1,3}分$/);
   await expect(page.getByTestId("win-rate-delta")).toContainText("个百分点");
@@ -51,7 +54,7 @@ test("查组合: first lookup shows progress, cached lookup is fast", async ({ p
   await expect(page).toHaveURL(/a=Alpha%23NA1&b=Bravo%23NA1/);
   const start = Date.now();
   await page.reload();
-  await expect(page.getByTestId("win-rate")).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByTestId("pair-result")).toBeVisible({ timeout: 10_000 });
   expect(Date.now() - start).toBeLessThan(10_000);
 });
 
@@ -73,7 +76,7 @@ test("查组合: insufficient data falls back to self-reported champions", async
   await expect(page.getByTestId("self-report")).toContainText("第 1 行：请选择位置");
   await pickPosition(page, 1, "中单");
   await page.getByRole("button", { name: "用这些英雄估算" }).click();
-  await expect(page.getByTestId("win-rate")).toBeVisible();
+  await expect(page.getByTestId("pair-result")).toBeVisible();
   await expect(page.getByTestId("notes")).toContainText("自选英雄");
 
   // the picks can be changed afterwards
@@ -121,7 +124,9 @@ test("找搭子: swipe deck, pages, undo and 互选", async ({ page }) => {
   await expect(card.getByTestId("score")).toBeVisible();
   await expect(card.getByTestId("card-roles").locator("[data-position]")).toHaveCount(2);
   await expect(card).not.toContainText("#");
+  await card.getByTestId("score-calculation").locator("summary").click();
   const first = parseFloat(await card.locator(".win-rate").innerText());
+  await card.getByTestId("score-calculation").locator("summary").click();
 
   // tapping the right half flips to 英雄组合, then 理由
   const box = (await card.boundingBox())!;
@@ -132,9 +137,11 @@ test("找搭子: swipe deck, pages, undo and 互选", async ({ page }) => {
 
   // ← 跳过: the next card is not better than the first; 撤销 brings the first back
   await page.keyboard.press("ArrowLeft");
+  await card.getByTestId("score-calculation").locator("summary").click();
   await expect(card.locator(".win-rate")).not.toHaveText(`${first.toFixed(1)}%`);
   expect(parseFloat(await card.locator(".win-rate").innerText())).toBeLessThanOrEqual(first);
   await page.getByRole("button", { name: "撤销上一次跳过" }).click();
+  await card.getByTestId("score-calculation").locator("summary").click();
   await expect(card.locator(".win-rate")).toHaveText(`${first.toFixed(1)}%`);
 
   // Demo likes and mutuals are clearly simulated and never expose contact actions.

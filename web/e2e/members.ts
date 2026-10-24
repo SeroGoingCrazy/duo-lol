@@ -12,8 +12,15 @@ export async function member(browser: Browser, name: string, riotId?: string, op
   if (!riotId) return page;
   await page.getByLabel("你的 Riot ID").fill(riotId);
   await page.getByRole("button", { name: "绑定", exact: true }).click();
+  await expect(page).toHaveURL(/\/welcome$/);
   await expect(page.getByTestId("bound-riot-id")).toHaveText(riotId);
-  if (optIn) await setOptIn(page, true);
+  if (optIn) {
+    await page.getByRole("button", { name: "下一步：加入推荐池" }).click();
+    await page.getByLabel(/同意被推荐/).check();
+    await page.getByRole("button", { name: "保存并开始找搭子" }).click();
+    await expect(page).toHaveURL(/\/find$/);
+  }
+  await page.goto("/account");
   await cached(page, riotId);
   return page;
 }

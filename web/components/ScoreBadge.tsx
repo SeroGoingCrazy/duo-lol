@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Info } from "lucide-react";
 import { animate, useReducedMotion } from "motion/react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -14,9 +14,15 @@ export function scoreTone(score: number) {
 }
 
 export function scoreSummary(r: { score: number; roles: { a: string; b: string }; score_by_roles?: boolean }, t: T) {
-  if (!r.score_by_roles) return t(r.score >= 50 ? "比 {n}% 的组合更好" : "只比 {n}% 的组合好", { n: r.score });
-  const roles = `${t.position(r.roles.a)}+${t.position(r.roles.b)}`;
-  return t(r.score >= 50 ? "比 {n}% 的{roles}组合更好" : "只比 {n}% 的{roles}组合好", { n: r.score, roles });
+  // A rounded 100th percentile must not claim to beat every possible pair.
+  const n = Math.max(1, Math.round(100 - r.score));
+  if (!r.score_by_roles) return r.score >= 100
+    ? t("超过几乎所有可双排组合")
+    : t("在可双排组合里排前 {n}%", { n });
+  const roles = `${t.position(r.roles.a)} + ${t.position(r.roles.b)}`;
+  return r.score >= 100
+    ? t("超过几乎所有{roles}组合", { roles })
+    : t("在{roles}组合里排前 {n}%", { n, roles });
 }
 
 export default function ScoreBadge({ score, size = "lg" }: { score: number | null; size?: "lg" | "sm" }) {
@@ -32,8 +38,29 @@ export default function ScoreBadge({ score, size = "lg" }: { score: number | nul
         lg ? "text-6xl leading-none tracking-tight sm:text-7xl" : "text-2xl")} aria-label={String(score)}>
         {lg ? <CountUp to={score} /> : score}
       </span>
-      {t.lang === "zh" && <span className="text-sm text-muted-foreground">分</span>}
+      {t.lang === "zh" && <span className="text-sm text-muted-foreground">{t("分")}</span>}
     </span>
+  );
+}
+
+/** Keep the main comparison in percentiles; raw prediction details are opt-in. */
+export function ScoreCalculation({ prediction, children }: {
+  prediction: { win_rate: number; win_rate_delta: number };
+  children?: ReactNode;
+}) {
+  const t = useT();
+  const up = prediction.win_rate_delta >= 0;
+  return (
+    <details className="mt-2 text-xs text-muted-foreground" data-testid="score-calculation"
+      onPointerDown={(e) => e.stopPropagation()} onPointerUp={(e) => e.stopPropagation()}
+      onKeyDown={(e) => e.stopPropagation()}>
+      <summary className="w-fit cursor-pointer rounded-sm py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{t("怎么算的")}</summary>
+      <div className="space-y-1 pt-1">
+        <div>{t("预测胜率")} <span className="win-rate font-medium tabular-nums text-foreground" data-testid="win-rate">{t.pct(prediction.win_rate)}</span></div>
+        <div data-testid="win-rate-delta">{t(up ? "比你们单排平均高 {pts}" : "比你们单排平均低 {pts}", { pts: t.points(prediction.win_rate_delta) })}</div>
+        {children}
+      </div>
+    </details>
   );
 }
 

@@ -4,7 +4,19 @@ import { expect, test, type Page } from "@playwright/test";
 // Alice, Dave and Ivan are all 铂金 in data/fake_riot.py, so they can duo with each other.
 import { member, setOptIn } from "./members";
 
-const remaining = (page: Page) => page.getByText(/剩余 \d+ \/ \d+/);
+const remaining = (page: Page) => page.getByTestId("deck-remaining");
+
+async function expectRemaining(page: Page, count: number) {
+  if (count === 0) {
+    await expect(page.getByTestId("deck-empty")).toBeVisible({ timeout: 30_000 });
+    await expect(remaining(page)).toHaveCount(0);
+  } else if (count < 5) {
+    await expect(remaining(page)).toHaveText(`还剩 ${count} 张卡片`, { timeout: 30_000 });
+  } else {
+    await expect(page.getByTestId("swipe-card")).toBeVisible({ timeout: 30_000 });
+    await expect(remaining(page)).toHaveCount(0);
+  }
+}
 
 test("会员 滑卡: 喜欢 back makes a 互选, only then the Riot ID shows", async ({ browser }) => {
   test.setTimeout(180_000);
@@ -13,17 +25,44 @@ test("会员 滑卡: 喜欢 back makes a 互选, only then the Riot ID shows", a
 
   await alice.goto("/find");
   await expect(alice.getByTestId("deck-owner")).toContainText("Alice#NA1");
-  await expect(remaining(alice)).toHaveText("剩余 1 / 1", { timeout: 30_000 });
+  await expectRemaining(alice, 1);
   await expect(alice.getByTestId("deck")).not.toContainText("Dave#NA1");   // hidden before 互选
   const firstCard = alice.getByTestId("swipe-card");
   await expect(firstCard.getByTestId("avatar")).toBeVisible();
   await expect(firstCard.getByTestId("card-games")).toContainText(/\d+ 场单双排/);
+  await alice.setViewportSize({ width: 1280, height: 900 });
+  await alice.evaluate(() => window.scrollTo(0, 0));
+  await expect(firstCard).toBeInViewport({ ratio: 1 });
+  for (const name of ["撤销上一次跳过", "跳过", "喜欢"]) {
+    await expect(alice.getByTestId("gamepad").getByRole("button", { name, exact: true })).toBeInViewport({ ratio: 1 });
+  }
+  await alice.screenshot({ path: "test-results/member-desktop-1280x900.png", fullPage: true });
   for (const [width, height] of [[375, 667], [390, 844]]) {
     await alice.setViewportSize({ width, height });
     await alice.evaluate(() => window.scrollTo(0, 0));
     await expect(firstCard).toBeInViewport({ ratio: 1 });
     await expect(alice.getByRole("button", { name: "喜欢", exact: true })).toBeInViewport({ ratio: 1 });
     await expect(alice.getByRole("button", { name: "跳过", exact: true })).toBeInViewport({ ratio: 1 });
+    await expect(alice.getByRole("button", { name: "撤销上一次跳过", exact: true })).toBeInViewport({ ratio: 1 });
+    if (width === 390) {
+      const sidebar = alice.getByTestId("deck-sidebar");
+      const chips = sidebar.getByTestId("deck-counts");
+      const panel = sidebar.locator('[role="tabpanel"]');
+      await expect(chips).toBeInViewport({ ratio: 1 });
+      await expect(panel).toBeHidden();
+      const chipBounds = await chips.boundingBox();
+      const cardBounds = await firstCard.boundingBox();
+      expect(chipBounds!.y + chipBounds!.height).toBeLessThanOrEqual(cardBounds!.y);
+      for (const name of [/^互选\s+0$/, /^喜欢我的人\s+0$/]) {
+        const chip = chips.getByRole("button", { name });
+        await chip.click();
+        await expect(chip).toHaveAttribute("aria-expanded", "true");
+        await expect(panel).toBeVisible();
+        await chip.click();
+        await expect(chip).toHaveAttribute("aria-expanded", "false");
+        await expect(panel).toBeHidden();
+      }
+    }
     await alice.screenshot({ path: `test-results/member-mobile-${width}x${height}.png`, fullPage: true });
   }
   await alice.setViewportSize({ width: 1280, height: 900 });
@@ -33,13 +72,14 @@ test("会员 滑卡: 喜欢 back makes a 互选, only then the Riot ID shows", a
 
   // Dave sees Alice under 喜欢我的人, opens her card and likes it: 互选
   await dave.goto("/find");
-  await expect(remaining(dave)).toHaveText("剩余 1 / 1", { timeout: 30_000 });
+  await expectRemaining(dave, 1);
   await dave.getByRole("tab", { name: /喜欢我的人/ }).click();
   await expect(dave.getByTestId("likes-list")).not.toContainText("Alice#NA1");
   await dave.getByTestId("likes-list").getByRole("button").first().click();
   await dave.getByRole("button", { name: "喜欢", exact: true }).click();
   await expect(dave.getByTestId("match-riot-id")).toHaveText("Alice#NA1");
-  await dave.getByRole("button", { name: "继续滑" }).click();
+  await dave.getByTestId("match-dialog").getByRole("button", { name: "关闭", exact: true }).click();
+  await expect(dave.getByTestId("match-dialog")).toHaveCount(0);
 
   // both see it after a reload
   await alice.reload();
@@ -51,7 +91,7 @@ test("会员 滑卡: 喜欢 back makes a 互选, only then the Riot ID shows", a
   await dave.getByTestId("mutual-list").getByRole("button", { name: "取消互选" }).click();
   await expect(dave.getByTestId("mutual-list")).toHaveCount(0);
   await alice.reload();
-  await expect(remaining(alice)).toBeVisible({ timeout: 30_000 });
+  await expect(alice.getByTestId("deck-empty")).toBeVisible({ timeout: 30_000 });
   await expect(alice.getByTestId("mutual-list")).toHaveCount(0);
 });
 
@@ -71,18 +111,18 @@ test("会员 滑卡: 撤销, 关闭同意被推荐, 举报 and the admin queue",
   for (const p of demo.partners) expect(["Alice#NA1", "Dave#NA1", "Victor#NA1"]).not.toContain(p.riot_id);
 
   await ivan.goto("/find");
-  await expect(remaining(ivan)).toBeVisible({ timeout: 30_000 });
-  const total = Number((await remaining(ivan).innerText()).match(/\/ (\d+)/)![1]);
+  await expect(ivan.getByTestId("swipe-card")).toBeVisible({ timeout: 30_000 });
+  const total = (await (await ivan.request.get("/api/deck")).json()).cards.length;
   expect(total).toBeGreaterThanOrEqual(1);
   await ivan.getByRole("button", { name: "跳过", exact: true }).click();
-  await expect(remaining(ivan)).toHaveText(`剩余 ${total - 1} / ${total}`);
+  await expectRemaining(ivan, total - 1);
   await ivan.getByRole("button", { name: "撤销上一次跳过" }).click();
-  await expect(remaining(ivan)).toHaveText(`剩余 ${total} / ${total}`);
+  await expectRemaining(ivan, total);
 
   // Victor stops 同意被推荐: gone from Ivan's new 牌堆
   await setOptIn(victor, false);
   await ivan.reload();
-  await expect(remaining(ivan)).toHaveText(`剩余 ${total - 1} / ${total - 1}`, { timeout: 30_000 });
+  await expectRemaining(ivan, total - 1);
   await victor.goto("/find");
   await expect(victor.getByTestId("demo-notice")).toContainText("同意被推荐");
 
@@ -90,9 +130,9 @@ test("会员 滑卡: 撤销, 关闭同意被推荐, 举报 and the admin queue",
   await ivan.getByRole("button", { name: "举报" }).click();
   await ivan.getByTestId("report-dialog").getByLabel("骚扰或辱骂").check();
   await ivan.getByRole("button", { name: "提交举报" }).click();
-  await expect(remaining(ivan)).toHaveText(`剩余 ${total - 2} / ${total - 1}`);
+  await expectRemaining(ivan, total - 2);
   await ivan.reload();
-  await expect(remaining(ivan).or(ivan.getByTestId("deck-empty")).first()).toBeVisible({ timeout: 30_000 });
+  await expectRemaining(ivan, total - 2);
 
   const notAdmin = await member(browser, "plain");
   const res = await notAdmin.goto("/admin");

@@ -1,6 +1,5 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Sparkles } from "lucide-react";
 import DeckFilters from "@/components/DeckFilters";
 import DeckStage from "@/components/DeckStage";
 import LookupProgress from "@/components/LookupProgress";
@@ -203,9 +202,7 @@ export default function MemberDeck({ riotId }: { riotId: string }) {
     <div className="mx-auto max-w-6xl">
       <div className="mb-2 flex flex-wrap items-end justify-between gap-2 sm:mb-6 sm:gap-4">
         <div>
-          <div className="mb-2 hidden items-center gap-1.5 text-xs font-medium text-primary sm:flex"><Sparkles className="size-3.5" />{t("找到合拍的下一局")}</div>
           <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{t("找搭子")}</h1>
-          <p className="mt-2 hidden text-sm text-muted-foreground sm:block">{t("推荐池里都是同意被推荐的会员。右滑喜欢，左滑跳过，互相喜欢后才能看到对方的 Riot ID。")}</p>
         </div>
         <div className="contents sm:flex sm:flex-wrap sm:items-center sm:gap-2">
           {filter && (
@@ -247,7 +244,7 @@ export default function MemberDeck({ riotId }: { riotId: string }) {
       </div>
 
       {cards && !loading && !waitingForPlayer && !needPicks && !retry && (
-        <DeckStage remaining={cards} total={total} mutual={mutual} likes={cards.filter((c) => likers.has(c.id))} info={info}
+        <DeckStage remaining={cards} mutual={mutual} likes={cards.filter((c) => likers.has(c.id))} info={info}
           canUndo={canUndo} onSwipe={onSwipe} onUndo={onUndo} cardActions={safety} paused={!!reporting}
           mutualActions={(c) => <>
             <Button variant="ghost" className={small} onClick={() => act(() => cancelMutualLike(c.id), c.id)}>{t("取消互选")}</Button>

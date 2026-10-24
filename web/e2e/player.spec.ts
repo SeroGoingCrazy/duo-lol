@@ -5,7 +5,7 @@ import { expect, test } from "@playwright/test";
 test("share link copies the result's address, and a player's name opens their 玩家资料页", async ({ page, context }) => {
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   await page.goto("/?a=Alpha%23NA1&b=Bravo%23NA1");
-  await expect(page.getByTestId("win-rate")).toBeVisible({ timeout: 45_000 });
+  await expect(page.getByTestId("pair-result")).toBeVisible({ timeout: 45_000 });
   await page.getByRole("button", { name: "复制分享链接" }).click();
   await expect(page.getByRole("button", { name: "已复制" })).toBeVisible();
   expect(await page.evaluate(() => navigator.clipboard.readText())).toMatch(/\/\?a=Alpha%23NA1&b=Bravo%23NA1$/);
@@ -21,7 +21,7 @@ test("share link copies the result's address, and a player's name opens their �
   await page.getByLabel("你的 Riot ID").fill("Alpha#NA1");
   await page.getByRole("button", { name: "预测" }).click();
   await expect(page).toHaveURL(/\/\?a=Alpha%23NA1&b=Bravo%23NA1$/);
-  await expect(page.getByTestId("win-rate")).toBeVisible({ timeout: 45_000 });
+  await expect(page.getByTestId("pair-result")).toBeVisible({ timeout: 45_000 });
 });
 
 test("a player page looks up someone new, and a bad address is not found", async ({ page }) => {

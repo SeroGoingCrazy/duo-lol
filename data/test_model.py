@@ -68,10 +68,11 @@ def test_rank_gap_table_applies():
     b = profile("DIAMOND", [("LeeSin", "JUNGLE", 30, 15)])
     out = predict.predict_pair(FakeSource(), a, b, gap_table={4: -30.0})
     assert out["win_rate"] < 0.5
-    assert any("相差 4 个大段，修正 -30 分" in r for r in out["reasons"])
+    assert any("相差 4 个大段，对预测胜率的影响约 -4.3 个百分点" in r for r in out["reasons"])
     unfitted = predict.predict_pair(FakeSource(), a, b)
     assert abs(unfitted["win_rate"] - 0.5) < 1e-9
-    assert any("尚未用数据拟合" in r for r in unfitted["reasons"])
+    assert "段位差：相差 4 个大段" in unfitted["reasons"]
+    assert all("拟合" not in r for r in unfitted["reasons"])
 
 
 def test_self_reported_profile_uses_global_rates():
@@ -99,7 +100,25 @@ if __name__ == "__main__":
     print("all passed")
 
 
-def test_points_never_negative_zero():
-    assert predict.points(-0.3) == "+0"
-    assert predict.points(44.5) == "+44" or predict.points(44.5) == "+45"
-    assert predict.points(-30) == "-30"
+def test_contribution_points_uses_elo_probability_difference():
+    # Elo 400 means 10:1 odds: removing it from a neutral total goes from
+    # 50% to 1/11, a +40.9 percentage-point effect. At a total of 800 the
+    # same term changes 100/101 to 10/11, only +8.1 percentage points.
+    assert predict.contribution_points(0, 400) == "+40.9"
+    assert predict.contribution_points(800, 400) == "+8.1"
+    assert predict.contribution_points(0, -400) == "-40.9"
+    assert predict.contribution_points(0, -0.01) == "+0.0"
+
+
+def test_reasons_use_percentage_points_and_hide_unsampled_champion_pairs():
+    a = profile("GOLD", [("Xayah", "BOTTOM", 40, 26)])
+    b = profile("GOLD", [("Rakan", "UTILITY", 40, 22)])
+    plain = predict.predict_pair(FakeSource(), a, b)
+    assert all(isinstance(reason, str) for reason in plain["reasons"])
+    assert any("熟练度：" in reason and "个百分点" in reason for reason in plain["reasons"])
+    assert not any(reason.startswith("组合加成：") for reason in plain["reasons"])
+    sampled = predict.predict_pair(FakeSource(pairs={
+        ("Xayah", "BOTTOM", "Rakan", "UTILITY"): (600, 1000),
+    }), a, b)
+    assert any("组合加成：" in reason and "个百分点" in reason and "1000 局样本" in reason
+               for reason in sampled["reasons"])

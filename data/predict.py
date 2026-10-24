@@ -138,25 +138,32 @@ def predict_pair(source, a, b, gap_table=None):
     }
 
 
-def points(elo):
-    """Signed whole points for a reason line; never '-0'."""
-    return f"{round(elo) + 0:+d}"
+def contribution_points(total_elo, term_elo):
+    """Win-rate percentage points versus omitting this term, using the model's Elo conversion.
+
+    This only formats reasons. Elo terms still add in the model; their separate
+    probability effects are not additive. Rounding must never display '-0.0'.
+    """
+    delta = elo_to_winrate(total_elo) - elo_to_winrate(total_elo - term_elo)
+    return f"{round(delta * 100, 1) + 0:+.1f}"
 
 
 def reasons(best, n_options):
     top = best["combos"][0]
     t = top["terms"]
+    total = sum(t.values())
     out = [
         f"位置组合：{best['role_a']} + {best['role_b']} 是 {n_options} 种可行分配里预测胜率最高的",
-        f"熟练度：{top['champion_a']} 贡献 {points(t['champion_a'])} 分，{top['champion_b']} 贡献 {points(t['champion_b'])} 分",
-        f"组合加成：{top['champion_a']} + {top['champion_b']} {points(t['synergy'])} 分（全服 {top['pair_games']} 局样本）",
+        f"熟练度：{top['champion_a']} 对预测胜率的影响约 {contribution_points(total, t['champion_a'])} 个百分点，{top['champion_b']} 约 {contribution_points(total, t['champion_b'])} 个百分点（各自与不计该项相比）",
     ]
+    if top["pair_games"] > 0:
+        out.append(f"组合加成：{top['champion_a']} + {top['champion_b']} 对预测胜率的影响约 {contribution_points(total, t['synergy'])} 个百分点（与不计该项相比；全服 {top['pair_games']} 局样本）")
     if best["tier_gap"] == 0:
         out.append("段位差：两人同段位")
     elif not best["rank_gap_fitted"]:
-        out.append(f"段位差：相差 {best['tier_gap']} 个大段，修正项尚未用数据拟合，暂不计入")
+        out.append(f"段位差：相差 {best['tier_gap']} 个大段")
     else:
-        out.append(f"段位差：相差 {best['tier_gap']} 个大段，修正 {points(best['rank_gap_elo'])} 分")
+        out.append(f"段位差：相差 {best['tier_gap']} 个大段，对预测胜率的影响约 {contribution_points(total, best['rank_gap_elo'])} 个百分点（与不计该项相比）")
     return out
 
 

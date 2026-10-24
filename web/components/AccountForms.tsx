@@ -1,6 +1,5 @@
 "use client";
 import { useActionState, useEffect, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowRight, BadgeCheck, CircleHelp } from "lucide-react";
 import { bindRiot, deleteAccount, savePrefs, unbindRiot, type ActionState } from "@/app/account/actions";
@@ -32,9 +31,12 @@ export function BindRiotCard({ riotId, verified }: { riotId: string | null; veri
   const t = useT();
   const [bound, bind, binding] = useActionState(bindRiot, NONE);
   const [unbound, unbind, unbinding] = useActionState(unbindRiot, NONE);
+  const router = useRouter();
   useEffect(() => {
-    if (bound.ok) trackFunnel("riot_bound");
-  }, [bound]);
+    if (!bound.ok) return;
+    trackFunnel("riot_bound");
+    if (bound.next) router.push(bound.next);
+  }, [bound, router]);
 
   if (riotId) {
     return (
@@ -47,9 +49,6 @@ export function BindRiotCard({ riotId, verified }: { riotId: string | null; veri
         {!verified && (
           <p className="mt-2 text-xs text-muted-foreground">{t("Riot 官方登录（RSO）开通后，可以一键验证这个账号是你的。冒用别人的账号会被举报下架。")}</p>
         )}
-        <Button asChild variant="outline" size="sm" className="mt-4">
-          <Link href="#recommendation">{t("下一步：偏好与推荐")}<ArrowRight /></Link>
-        </Button>
         <form action={unbind} className="mt-4"><Button variant="outline" size="sm" disabled={unbinding}>{t("换一个 Riot ID")}</Button></form>
         <p className="mt-2 text-xs text-muted-foreground">{t("换号会结束你现在的互选。")}</p>
         <Feedback state={unbound.error ? unbound : bound} />
