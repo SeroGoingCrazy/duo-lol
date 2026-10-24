@@ -10,26 +10,30 @@ import { Button } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
 import {
   ApiError, blockMember, cancelMutualLike, ensurePlayer, getDeck, listChampions, postSwipe, reportMember, saveSelfReport,
-  saveDeckFilter, setLooking, undoSwipe, type Deck, type DeckCard, type LookupUpdate, type Player,
+  saveDeckFilter, setLooking, undoSwipe, type Deck, type DeckCard, type LookupUpdate, type Player, type SelfReport,
 } from "@/lib/api";
 import { trackFunnel } from "@/lib/analytics";
-import { isFiltered, LOOKING_HOURS, type DeckFilter } from "@/lib/profile";
+import { isFiltered, LOOKING_HOURS, NO_FILTER, type DeckFilter } from "@/lib/profile";
 import type { Swipe } from "@/lib/deck";
 import { REPORT_REASONS } from "@/lib/reportReasons";
 import { useChampionInfo } from "@/lib/useChampionInfo";
 import { useT } from "@/components/LangProvider";
 
-const RETRY_MAX_S = 600;
-const FILTER_DEBOUNCE_MS = 400;   // a burst of chip clicks makes one save and one re-score   // an empty 牌堆 retries with 1.5x backoff up to this (PRD-v2 §2.1)
+const RETRY_MAX_S = 600;   // empty 牌堆 retries back off up to this (PRD-v2 §2.1)
+const FILTER_DEBOUNCE_MS = 400;
 
 /** 找搭子 for a bound 会员 who 同意被推荐: real 喜欢 / 跳过 against other 会员 (PRD-v2 §3.2-3.4). */
 export default function MemberDeck({ riotId }: { riotId: string }) {
   const info = useChampionInfo();
   const t = useT();
   // what is loading, kept as data so the label follows a language switch: the deck, or a Riot ID's lookup
-  const [loading, setLoading] = useState<{ riotId?: string } | null>(null);
+  const [loading, setLoading] = useState<{ riotId?: string } | null>({ riotId });
   const [progress, setProgress] = useState<LookupUpdate | null>(null);
   const [error, setError] = useState("");
+  const [retry, setRetry] = useState<(() => void) | null>(null);
+  const [waitingForPlayer, setWaitingForPlayer] = useState(false);
+  const [emptyReason, setEmptyReason] = useState<Deck["empty_reason"]>(null);
+  const [savingReport, setSavingReport] = useState(false);
   const [needPicks, setNeedPicks] = useState<Player | null>(null);
   const [champions, setChampions] = useState<string[]>([]);
   const [cards, setCards] = useState<DeckCard[] | null>(null);
@@ -46,48 +50,78 @@ export default function MemberDeck({ riotId }: { riotId: string }) {
   const me = useRef<Player | null>(null);
   const latest = useRef(0);   // filter changes can overlap: only the newest deck request may land
 
-  /** Fetch and show the 牌堆; fetchDeck replaces the plain GET (a filter save returns the deck it gives). */
-  const load = useCallback(async (quiet = false, fetchDeck?: () => Promise<Deck>, onFail?: () => void) => {
+  /** A revision belongs to the user's intent, including the debounce / serialized save wait. */
+  const load = useCallback(async (quiet = false, fetchDeck: () => Promise<Deck> = getDeck, seq = ++latest.current, retryRequest?: () => void) => {
+    if (seq !== latest.current) return;
+    const b = backoff.current;
+    if (b.timer) { clearTimeout(b.timer); b.timer = null; }
     if (!quiet) setLoading({});
-    const seq = ++latest.current;
+    setError(""); setRetry(null); setWaitingForPlayer(false);
     try {
-      const d = await (fetchDeck ?? getDeck)();
+      const d = await fetchDeck();
       if (seq !== latest.current) return;
       setCards(d.cards); setTotal(d.cards.length); setLikers(new Set(d.likes_you)); setMutual(d.mutual);
-      setLikesLeft(d.likes_remaining); setCanUndo(d.can_undo); setNeedPicks(null); setError("");
+      setLikesLeft(d.likes_remaining); setCanUndo(d.can_undo); setNeedPicks(null);
       setFilter(d.filter); setLookingUntil(d.looking_until ? new Date(d.looking_until) : null);
+      setEmptyReason(d.empty_reason);
       trackFunnel("deck_loaded", "member");
-      const b = backoff.current;
-      if (b.timer) clearTimeout(b.timer);
+      if (d.cards.length === 0) trackFunnel("deck_empty", "member");
       if (d.cards.length === 0 && d.retry_after) {
         b.wait = Math.min(RETRY_MAX_S, b.wait ? b.wait * 1.5 : d.retry_after);
         b.timer = setTimeout(() => load(true), b.wait * 1000);
       } else b.wait = 0;
     } catch (e) {
       if (seq !== latest.current) return;
-      onFail?.();
-      if (e instanceof ApiError && e.status === 422 && me.current) setNeedPicks(me.current);
-      else setError(e instanceof ApiError ? e.message : String(e));
+      if (e instanceof ApiError && e.code === "not_cached") setWaitingForPlayer(true);
+      else if (e instanceof ApiError && e.status === 422 && me.current) setNeedPicks(me.current);
+      else {
+        setError(e instanceof ApiError ? e.message : String(e));
+        // Retry the same operation, including an intended filter that may not have been saved.
+        setRetry(() => retryRequest ?? (() => { void load(false, fetchDeck); }));
+      }
     } finally {
       if (seq === latest.current) setLoading(null);
     }
   }, []);
 
+  const preparePlayer = useCallback(async () => {
+    const seq = ++latest.current;
+    if (backoff.current.timer) clearTimeout(backoff.current.timer);
+    setLoading({ riotId }); setProgress(null); setError(""); setRetry(null); setWaitingForPlayer(false);
+    try {
+      const player = await ensurePlayer(riotId, (update) => { if (seq === latest.current) setProgress(update); });
+      if (seq !== latest.current) return;
+      me.current = player;
+      await load(false, getDeck, seq);
+    } catch (e) {
+      if (seq !== latest.current) return;
+      setError(e instanceof ApiError ? e.message : String(e));
+      setRetry(() => () => { void preparePlayer(); });
+      setLoading(null);
+    }
+  }, [riotId, load]);
+
   useEffect(() => {
     listChampions().then(setChampions).catch(() => setChampions([]));
-    (async () => {
-      try {
-        setLoading({ riotId }); setProgress(null);
-        me.current = await ensurePlayer(riotId, setProgress);
-        await load();
-      } catch (e) {
-        setError(e instanceof ApiError ? e.message : String(e));
-        setLoading(null);
-      }
-    })();
+    void preparePlayer();
     const b = backoff.current;
-    return () => { if (b.timer) clearTimeout(b.timer); };
-  }, [riotId, load]);   // eslint-disable-line react-hooks/exhaustive-deps
+    return () => { latest.current++; if (b.timer) clearTimeout(b.timer); };
+  }, [preparePlayer]);
+
+  async function submitReport(report: SelfReport) {
+    const seq = ++latest.current;
+    if (backoff.current.timer) clearTimeout(backoff.current.timer);
+    setError(""); setRetry(null); setLoading({}); setSavingReport(true);
+    try {
+      await saveSelfReport(report);
+      if (seq === latest.current) await load(false, getDeck, seq);
+    } catch (e) {
+      if (seq !== latest.current) return;
+      setError(e instanceof ApiError ? e.message : String(e));
+      setRetry(() => () => { void submitReport(report); });
+      setLoading(null);
+    } finally { setSavingReport(false); }
+  }
 
   const remove = (id: string) => {
     setCards((cs) => cs?.filter((c) => c.id !== id) ?? cs);
@@ -131,20 +165,18 @@ export default function MemberDeck({ riotId }: { riotId: string }) {
     }
   }
 
-  // Chips update at once; the save waits for a pause in clicking, and saves go out one at a time so the
-  // last one is what the server keeps. A failed save puts the chips back to what the server has.
-  const saved = useRef<DeckFilter | null>(null);
+  // Preserve the desired filters on failure. Saves remain serialized and only the latest intent lands.
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saving = useRef<Promise<unknown>>(Promise.resolve());
-  useEffect(() => { if (filter && !saveTimer.current) saved.current = filter; }, [filter]);
   useEffect(() => () => { if (saveTimer.current) clearTimeout(saveTimer.current); }, []);
   function changeFilter(f: DeckFilter) {
-    setFilter(f);
-    latest.current++;   // a deck still loading for the old filter must not land
+    setFilter(f); setLoading({}); setError(""); setRetry(null); setWaitingForPlayer(false);
+    const seq = ++latest.current;
+    if (backoff.current.timer) clearTimeout(backoff.current.timer);
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
       saveTimer.current = null;
-      const run = () => load(false, () => saveDeckFilter(f), () => setFilter(saved.current));
+      const run = () => load(false, () => saveDeckFilter(f), seq, () => changeFilter(f));
       saving.current = saving.current.then(run, run);
     }, FILTER_DEBOUNCE_MS);
   }
@@ -190,16 +222,31 @@ export default function MemberDeck({ riotId }: { riotId: string }) {
       </div>
 
       <div className="space-y-3">
-        {loading && (loading.riotId
-          ? <LookupProgress label={t("正在查询 {id}…", { id: loading.riotId })} progress={progress} hint={t("第一次查询大约需要 2 分钟，之后会缓存。")} />
-          : <LookupProgress label={t("正在从推荐池里准备你的牌堆…")} />)}
-        {filter && <DeckFilters filter={filter} onChange={changeFilter} />}
-        {error && <Alert variant="error">{t.api(error)}</Alert>}
-        {needPicks && <SelfReportForm className="max-w-3xl" player={needPicks} champions={champions}
-          onSubmit={async (r) => { try { await saveSelfReport(r); await load(); } catch (e) { setError(e instanceof ApiError ? e.message : String(e)); } }} />}
+        {loading && <div id="member-loading" className="space-y-3" data-testid="member-loading">
+          <p className="text-sm font-medium">{t(loading.riotId ? "你的资料还在加载，完成后会自动查找搭子。" : "正在检查推荐池，请稍候。")}</p>
+          {loading.riotId
+            ? <LookupProgress label={t("正在查询 {id}…", { id: loading.riotId })} progress={progress} hint={t("第一次查询大约需要 2 分钟，之后会缓存。")} />
+            : <LookupProgress label={t("正在从推荐池里准备你的牌堆…")} />}
+        </div>}
+        {waitingForPlayer && !loading && <Alert data-testid="member-waiting">
+          <p className="font-semibold">{t("你的资料还没准备好")}</p>
+          <p className="mt-1">{t("对局资料仍在读取，查看进度后会继续查找搭子。")}</p>
+          <Button className="mt-3" onClick={() => void preparePlayer()}>{t("查看加载进度")}</Button>
+        </Alert>}
+        {filter && <fieldset disabled={savingReport || !!loading?.riotId}><DeckFilters filter={filter} onChange={changeFilter} /></fieldset>}
+        {error && <Alert variant="error">
+          <p>{t.api(error)}</p>
+          {retry && <>
+            <p className="mt-1">{t("已保留你的信息，可以直接重试。")}</p>
+            <Button variant="outline" className="mt-3" disabled={!!loading} onClick={retry}>{t("重试")}</Button>
+            {needPicks && <Button variant="outline" className="ml-2 mt-3" onClick={() => { setError(""); setRetry(null); }}>{t("修改自选英雄")}</Button>}
+          </>}
+        </Alert>}
+        {needPicks && <fieldset disabled={!!loading || !!retry}><SelfReportForm className="max-w-3xl" player={needPicks} champions={champions}
+          onSubmit={submitReport} /></fieldset>}
       </div>
 
-      {cards && (
+      {cards && !loading && !waitingForPlayer && !needPicks && !retry && (
         <DeckStage remaining={cards} total={total} mutual={mutual} likes={cards.filter((c) => likers.has(c.id))} info={info}
           canUndo={canUndo} onSwipe={onSwipe} onUndo={onUndo} cardActions={safety} paused={!!reporting}
           mutualActions={(c) => <>
@@ -207,10 +254,16 @@ export default function MemberDeck({ riotId }: { riotId: string }) {
             {safety(c)}
           </>}
           empty={<>
-            <p className="font-semibold">{t("暂时没有更多搭子了")}</p>
-            <p className="text-sm text-muted-foreground">{t("有新会员加入时会自动出现新的卡片。也可以去查组合，直接算你和某个人的分数。")}</p>
-            {filter && isFiltered(filter) && <p className="text-sm text-muted-foreground">{t("你开了筛选，放宽一些会看到更多人。")}</p>}
-            <Button variant="outline" asChild><a href="/">{t("去查组合")}</a></Button>
+            <p className="font-semibold">{t(emptyReason === "filtered" ? "当前筛选下没有搭子" : "暂时没有可推荐的搭子")}</p>
+            <p className="text-sm text-muted-foreground">{t(emptyReason === "filtered"
+              ? "筛选挡住了可推荐的会员，清除筛选、放宽条件后再看看。"
+              : total > 0 ? "你已看完当前牌堆，可以重新查找，或先和朋友查组合。"
+              : "暂时没有符合推荐条件的新会员。我们会自动检查，你也可以先和朋友查组合。")}</p>
+            <div className="flex flex-wrap justify-center gap-2">
+              {filter && isFiltered(filter) && <Button onClick={() => changeFilter(NO_FILTER)}>{t("一键清除筛选")}</Button>}
+              <Button variant={emptyReason === "filtered" ? "outline" : "default"} asChild><a href={`/?a=${encodeURIComponent(riotId)}#duo-check`}>{t("和朋友查组合")}</a></Button>
+              <Button variant="outline" onClick={() => void load()}>{t("重新查找")}</Button>
+            </div>
           </>} />
       )}
 

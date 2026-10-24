@@ -14,6 +14,26 @@ export function pickLang(cookie: string | undefined): Lang {
 }
 
 const EN = new Map<string, string>(Object.entries({
+  // Empty states and recovery
+  "你已看完当前牌堆，可以重新查找，或先和朋友查组合。": "You have reached the end of this deck. Find again, or check your duo score with a friend.",
+  "你的资料还在加载，完成后会自动查找搭子。": "Your profile is still loading. We will find partners when it is ready.",
+  "正在检查推荐池，请稍候。": "Checking the recommendation pool. Please wait.",
+  "你的资料还没准备好": "Your profile is not ready yet",
+  "对局资料仍在读取，查看进度后会继续查找搭子。": "Your match history is still loading. View progress to continue finding partners.",
+  "查看加载进度": "View loading progress",
+  "已保留你的信息，可以直接重试。": "Your information is saved. You can retry now.",
+  "重试": "Retry",
+  "当前筛选下没有搭子": "No partners with these filters",
+  "暂时没有可推荐的搭子": "No partners to recommend right now",
+  "筛选挡住了可推荐的会员，清除筛选、放宽条件后再看看。": "Your filters excluded available partners. Clear or relax them to try again.",
+  "暂时没有符合推荐条件的新会员。我们会自动检查，你也可以先和朋友查组合。": "There are no new eligible partners right now. We will check automatically, or you can check your duo score with a friend.",
+  "一键清除筛选": "Clear all filters",
+  "重新查找": "Find again",
+  "输入和已加载的资料已保留，可以直接重试。": "Your inputs and loaded profiles are saved. You can retry now.",
+  "重试评分": "Retry score",
+  "重试查询": "Retry lookup",
+  "重试推荐": "Retry recommendations",
+
   // nav, layout, footer
   "匹配搭子": "Duo Finder",
   "查组合": "Duo check",

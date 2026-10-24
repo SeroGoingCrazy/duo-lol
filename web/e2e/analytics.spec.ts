@@ -11,6 +11,12 @@ test("analytics validates anonymous milestones and accepts idempotent writes", a
   expect((await post(payload, { dnt: "1" })).status()).toBe(204);
   expect((await post(payload, { origin: baseURL! })).status()).toBe(204);
   expect((await post(payload, { origin: baseURL! })).status()).toBe(204);
+  for (const event of ["deck_empty", "first_card_viewed"]) {
+    for (const mode of ["demo", "member"]) {
+      expect((await post({ ...payload, event, mode }, { origin: baseURL! })).status()).toBe(204);
+      expect((await post({ ...payload, event, mode, candidate_id: "never-collected" })).status()).toBe(400);
+    }
+  }
 });
 
 test("analytics rejects a chunked upload before the sender finishes its body", async ({ baseURL }) => {

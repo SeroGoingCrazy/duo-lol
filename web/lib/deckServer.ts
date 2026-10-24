@@ -5,7 +5,7 @@ import { after } from "next/server";
 import { auth } from "@/auth";
 import { getDb, schema } from "@/lib/db";
 import { pythonFetch } from "@/lib/pythonApi";
-import { POSITIONS, riotIdKey, type DeckCard, type DuoRecord, type Partner, type SelfReport } from "@/lib/api";
+import { POSITIONS, riotIdKey, type Deck, type DeckCard, type DuoRecord, type Partner, type SelfReport } from "@/lib/api";
 import { SELF_REPORT_TIERS } from "@/lib/labels";
 import { REPORT_REASONS } from "@/lib/reportReasons";
 import { sendDiscordDm } from "@/lib/discordNotify";
@@ -125,9 +125,9 @@ export async function deck() {
   pool.sort((a, b) => +b.members.lastActiveAt! - +a.members.lastActiveAt!);   // most recently active first if capped
   const filter = cleanFilter(prefs?.deckFilter, POSITIONS);
   const now = new Date();
-  const unseen = pool.filter((r) => !hidden.has(r.members.id) && !swiped.has(r.members.id) && !mutual.has(r.members.id)
-    && (likers.has(r.members.id) || passes(profileOf(r.member_prefs, now), filter)))
-    .slice(0, MAX_CANDIDATES);
+  const eligible = pool.filter((r) => !hidden.has(r.members.id) && !swiped.has(r.members.id) && !mutual.has(r.members.id));
+  const passesFilter = (r: (typeof pool)[number]) => likers.has(r.members.id) || passes(profileOf(r.member_prefs, now), filter);
+  const unseen = eligible.filter(passesFilter).slice(0, MAX_CANDIDATES);
   const asCandidate = (r: (typeof pool)[number]) => ({ member: r.members, report: r.member_prefs.selfReport ?? null });
   // scored apart, so 互选 never take 牌堆 slots and keep their own score
   const shownMutual = mutualRows.filter((r) => !hidden.has(r.members.id));
@@ -144,6 +144,17 @@ export async function deck() {
     if (p) cards.push({ ...card(r.members.id, p, profileOf(r.member_prefs, now)), avatar: avatar(r.members.avatarIconId) });
   }
   cards.sort((a, b) => b.win_rate - a.win_rate);
+  let emptyReason: Deck["empty_reason"] = null;
+  if (cards.length === 0) {
+    emptyReason = "no_candidates";
+    if (isFiltered(filter)) {
+      // Only blame filters if clearing them could produce a scored card. Uncached, data-poor or
+      // rank-incompatible members can be in the pool without ever becoming recommendations.
+      // Apply the same cap as an unfiltered request before probing the excluded candidates.
+      const excluded = eligible.slice(0, MAX_CANDIDATES).filter((r) => !passesFilter(r));
+      if ((await score(me, prefs?.selfReport, excluded.map(asCandidate))).size > 0) emptyReason = "filtered";
+    }
+  }
   // a 互选 stays listed even if the pair can no longer be scored (say, one of them climbed out of duo range)
   const mutualCards: DeckCard[] = mutualRows
     .filter((r) => !hidden.has(r.members.id))
@@ -161,7 +172,8 @@ export async function deck() {
     cards, likes_you: cards.filter((c) => likers.has(c.id)).map((c) => c.id), mutual: mutualCards,
     likes_remaining: DAILY_LIKES - (await likesToday(db, me.id)), can_undo: lastPass !== null,
     // an empty deck refills as 会员 join; slower when my own filters emptied it
-    retry_after: cards.length === 0 ? (isFiltered(filter) ? 300 : 60) : null, filter, looking_until: prefs?.lookingUntil ?? null,
+    retry_after: cards.length === 0 ? (emptyReason === "filtered" ? 300 : 60) : null,
+    empty_reason: emptyReason, filter, looking_until: prefs?.lookingUntil ?? null,
   };
 }
 
