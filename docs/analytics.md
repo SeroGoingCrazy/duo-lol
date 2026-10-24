@@ -10,6 +10,8 @@ Migration `0007_funnel_events` adds `app.funnel_events`. Its primary key dedupli
 | find_viewed | Find page mounted, with the actual demo or member mode, including direct visits |
 | pair_started | A pair lookup submitted or a shared pair link starts loading; anchor clicks are excluded |
 | pair_completed | Pair prediction returned successfully |
+| pair_invite_clicked | Pair-result invitation copy button clicked; public mode, including logged-in visitors |
+| pair_find_more_clicked | Pair-result find-more link clicked; public mode, before navigation to Find or Login |
 | login_viewed | Login page mounted |
 | account_viewed | Authenticated account page mounted; this includes returning sessions, not only new logins |
 | riot_bound | Binding succeeded |
@@ -19,6 +21,8 @@ Migration `0007_funnel_events` adds `app.funnel_events`. Its primary key dedupli
 | first_card_viewed | At least 1% of a real card first intersects the viewport while the tab is visible, in demo or member mode; a successful request alone does not count |
 | first_swipe | First successful like or pass |
 | mutual_like | Mutual like, with simulated events in demo mode only |
+
+The pair-result actions reuse this anonymous milestone model: they count a click, not a successful clipboard write, a sent invitation, or a completed registration. Repeated clicks are deduplicated per tab session and mode. The invitation text and pair URL stay in the clipboard; neither is sent to analytics.
 
 These are tab-session milestones, not mutually exclusive outcomes or per-request counts. A session can load an empty deck, clear its filters and later view a card, producing both `deck_empty` and `first_card_viewed`. Empty then populated is therefore not a failed onboarding session. A populated response below the fold or in a background tab produces `deck_loaded` without `first_card_viewed` until the card is shown. Card visibility is a viewport/tab signal, not proof of attention. Repeated visibility changes and card changes send at most one impression per mounted deck; the database also deduplicates refreshes and remounts by session and mode.
 

@@ -31,7 +31,7 @@ test("a 喜欢 and a 互选 show in the nav until 找搭子 is opened, and the �
   // B made this 互选 themselves, so it isn't news to B
   const bChecked = b.waitForResponse((r) => r.url().endsWith("/api/notifications"));
   await b.goto("/account");
-  expect(await (await bChecked).json()).toEqual({ unseen: 0 });
+  expect(await (await bChecked).json()).toMatchObject({ unseen: 0 });
 
   // A was away: the 互选 waits in the nav, and opening 找搭子 clears it
   await a.goto("/account");
@@ -41,7 +41,7 @@ test("a 喜欢 and a 互选 show in the nav until 找搭子 is opened, and the �
   await expect(a.getByTestId("duo-record")).toHaveText("本赛季一起打了 10 局，赢 7 局");
   const checked = a.waitForResponse((r) => r.url().endsWith("/api/notifications"));
   await a.goto("/account");
-  expect(await (await checked).json()).toEqual({ unseen: 0 });
+  expect(await (await checked).json()).toMatchObject({ unseen: 0 });
   await expect(badge(a)).toHaveCount(0);
 
   for (const p of [a, b]) await setOptIn(p, false);

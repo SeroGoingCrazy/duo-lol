@@ -78,6 +78,10 @@ test("查组合: insufficient data falls back to self-reported champions", async
   await page.getByRole("button", { name: "用这些英雄估算" }).click();
   await expect(page.getByTestId("pair-result")).toBeVisible();
   await expect(page.getByTestId("notes")).toContainText("自选英雄");
+  // ?a=&b= cannot reproduce 自选英雄, so neither sharing action offers a misleading result link.
+  await expect(page.getByRole("button", { name: "复制分享链接" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "邀请 TA 一起来" })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "找更多像 TA 的搭子" })).toBeVisible();
 
   // the picks can be changed afterwards
   await page.getByRole("button", { name: "修改自选英雄" }).click();

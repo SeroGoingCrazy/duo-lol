@@ -65,3 +65,42 @@ for (const scoreByRoles of [true, false]) {
     await expect(result.getByTestId("win-rate")).toBeHidden();
   });
 }
+
+test("pair invitation keeps only the entered IDs, translates copy, and waits for login state", async ({ page, context }) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  const player = (riot_id: string) => ({ riot_id, tier: "GOLD", games: 40, champions: [] });
+  await page.route("**/api/champions", (route) => route.fulfill({ json: [] }));
+  await page.route("**/champions/names.json", (route) => route.fulfill({ json: {} }));
+  await page.route("**/api/lookups", (route) => route.fulfill({ json: { player: player(route.request().postDataJSON().riot_id) } }));
+  await page.route("**/api/pair", (route) => route.fulfill({ json: {
+    a: player("Alpha#NA1"), b: player("Bravo#NA1"), score: 84, score_by_roles: true,
+    win_rate: 0.54, win_rate_delta: 0.02, solo_baselines: { a: 0.52, b: 0.52 },
+    roles: { a: "MIDDLE", b: "JUNGLE" }, notes: [], top_pairs: [],
+  } }));
+  let releaseSession!: () => void;
+  const sessionReady = new Promise<void>((resolve) => { releaseSession = resolve; });
+  await page.route("**/api/auth/session", async (route) => {
+    await sessionReady;
+    await route.fulfill({ json: { user: { id: "private-member", name: "PrivateMember#NA1" } } });
+  });
+  await page.goto("/?a=alpha%23na1&b=bravo%23na1&member=PrivateMember%23NA1#duo-check");
+  try {
+    await expect(page.getByTestId("pair-result")).toBeVisible();
+    await expect(page.getByRole("button", { name: "找更多像 TA 的搭子" })).toBeDisabled();
+    await expect(page.getByRole("link", { name: "找更多像 TA 的搭子" })).toHaveCount(0);
+  } finally { releaseSession(); }
+  await expect(page.getByRole("link", { name: "找更多像 TA 的搭子" })).toHaveAttribute("href", "/find");
+  await page.getByTestId("lang-switch").getByRole("button", { name: "English" }).click();
+  await expect(page.getByTestId("pair-result")).toContainText("invite them to sign up and join the recommendation pool");
+  // Same-page anchor navigation can clear the query while the result stays mounted.
+  await page.evaluate(() => window.history.replaceState(null, "", "/#duo-check"));
+  await page.getByRole("button", { name: "Invite them to join" }).click();
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toContain("Sign up and join the recommendation pool");
+  const invitation = await page.evaluate(() => navigator.clipboard.readText());
+  expect(invitation).toContain("Sign up and join the recommendation pool");
+  const url = new URL(invitation.split("\n")[1]);
+  expect([...url.searchParams]).toEqual([["a", "alpha#na1"], ["b", "bravo#na1"]]);
+  expect(url.hash).toBe("");
+  expect(invitation).not.toContain("PrivateMember");
+  await expect(page.getByRole("link", { name: "Find more partners like them" })).toHaveAttribute("href", "/find");
+});

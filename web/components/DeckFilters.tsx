@@ -46,7 +46,7 @@ export default function DeckFilters({ filter, onChange }: { filter: DeckFilter; 
             <ChoiceChip checked={filter.voice} onChange={() => onChange({ ...filter, voice: !filter.voice })}>{t("开麦")}</ChoiceChip>
             <ChoiceChip checked={filter.looking_now} onChange={() => onChange({ ...filter, looking_now: !filter.looking_now })}>{t("现在想打")}</ChoiceChip>
           </div>
-          <p className="text-xs text-muted-foreground">{t("筛选只决定哪些人出现，顺序仍按预测胜率。喜欢了你的人总会出现。")}</p>
+          <p className="text-xs text-muted-foreground">{t("筛选只决定哪些人出现。你们都现在想打时优先，组内按预测胜率排序。喜欢了你的人总会出现。")}</p>
         </div>
       )}
     </div>

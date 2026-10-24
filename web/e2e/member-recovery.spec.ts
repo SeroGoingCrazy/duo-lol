@@ -136,11 +136,14 @@ test("a delayed filter retry stays serialized with a newer filter edit", async (
     const filters = page.getByTestId("deck-filters");
     await filters.getByRole("button", { name: "筛选", exact: true }).click();
     await filters.getByText("开麦", { exact: true }).click();
+    await expect(page.getByTestId("looking-toggle")).toBeDisabled();
     await expect(page.getByRole("alert").filter({ hasText: "保存失败" })).toBeVisible();
+    await expect(page.getByTestId("looking-toggle")).toBeDisabled();
     expect(writes).toEqual([a]);
 
     await page.getByRole("button", { name: "重试", exact: true }).click();
     await expect.poll(() => retryStarted).toBe(true);
+    await expect(page.getByTestId("looking-toggle")).toBeDisabled();
     await filters.getByText("한국어", { exact: true }).click();
     await expect(filters.getByRole("checkbox", { name: "한국어", exact: true })).toBeChecked();
     // Let the 400 ms debounce expire while A is held. B must wait for A, not start alongside it.
@@ -150,6 +153,7 @@ test("a delayed filter retry stays serialized with a newer filter edit", async (
 
     await expect(page.getByTestId("swipe-card")).toBeVisible();
     await expect.poll(() => writes).toEqual([a, a, b]);
+    await expect(page.getByTestId("looking-toggle")).toBeEnabled();
     expect(persisted).toEqual(b);
     await expect(filters.getByRole("checkbox", { name: "开麦", exact: true })).toBeChecked();
     await expect(filters.getByRole("checkbox", { name: "한국어", exact: true })).toBeChecked();

@@ -15,7 +15,7 @@ import { useT } from "@/components/LangProvider";
 
 /** The 牌堆 on screen, shared by the demo (ADR-0008) and the 会员 deck: card, buttons, keys, sidebar, 互选 dialog.
  *  The parent owns the data; onSwipe resolves to the 互选 card (with Riot ID) when a 喜欢 made one. */
-export default function DeckStage({ remaining, mutual, likes, info, canUndo, onSwipe, onUndo, empty, cardActions, mutualActions, paused = false, demo = false }: {
+export default function DeckStage({ remaining, mutual, likes, info, canUndo, onSwipe, onUndo, empty, cardActions, mutualActions, paused = false, demo = false, lookingNowFirst = false }: {
   remaining: DeckCard[];
   mutual: DeckCard[];
   likes: DeckCard[];
@@ -28,6 +28,7 @@ export default function DeckStage({ remaining, mutual, likes, info, canUndo, onS
   mutualActions?: (c: DeckCard) => React.ReactNode;   // 取消互选 / 拉黑 / 举报 in the 互选 list
   paused?: boolean;                                    // a dialog of the parent's is open: arrow keys do nothing
   demo?: boolean;                                      // simulated activity must never look like a real member response
+  lookingNowFirst?: boolean;                           // PRD-v3 §5.3 group 1, retaining prediction order within groups
 }) {
   const t = useT();
   const still = useReducedMotion();
@@ -143,10 +144,10 @@ export default function DeckStage({ remaining, mutual, likes, info, canUndo, onS
       <div className="grid gap-2 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start lg:gap-8" data-testid="deck">
         <div className="swipe-stage min-w-0 rounded-3xl px-1 pb-3 pt-2 sm:px-6 sm:pb-5 sm:pt-4">
           <div className="mx-auto mb-2 flex max-w-[30rem] items-center justify-between px-1 text-xs text-muted-foreground sm:mb-4">
-            <span className="font-medium text-foreground">{t("为你推荐")} <span className="ml-2 font-normal text-muted-foreground">{t("按预测胜率排序")}</span></span>
+            <span className="font-medium text-foreground">{t("为你推荐")} <span className="ml-2 font-normal text-muted-foreground">{t(lookingNowFirst ? "都想打的优先，组内按预测胜率" : "按预测胜率排序")}</span></span>
             <span aria-live="polite">{remaining.length > 0 && remaining.length < 5 && <span data-testid="deck-remaining">{t("还剩 {n} 张卡片", { n: remaining.length })}</span>}</span>
           </div>
-          <div ref={cardArea} className="relative mx-auto h-[clamp(19rem,calc(100dvh-var(--deck-top,16rem)-8rem),35rem)] max-w-[30rem] sm:h-[clamp(19rem,calc(100dvh-var(--deck-top,16rem)-10rem),35rem)]"
+          <div ref={cardArea} className={`relative mx-auto max-w-[30rem] ${top ? "h-[clamp(19rem,calc(100dvh-var(--deck-top,16rem)-8rem),35rem)] sm:h-[clamp(19rem,calc(100dvh-var(--deck-top,16rem)-10rem),35rem)]" : "min-h-[19rem]"}`}
             style={{ "--deck-top": cardTop == null ? undefined : `${cardTop}px` } as CSSProperties}>
             {top ? (
               <>
@@ -156,7 +157,7 @@ export default function DeckStage({ remaining, mutual, likes, info, canUndo, onS
                 </div>
               </>
             ) : (
-              <Card className="flex h-full flex-col items-center justify-center gap-3 text-center" data-testid="deck-empty">{empty}</Card>
+              <Card className="flex min-h-[19rem] flex-col items-center justify-center gap-3 text-center" data-testid="deck-empty">{empty}</Card>
             )}
           </div>
 
@@ -197,6 +198,7 @@ export default function DeckStage({ remaining, mutual, likes, info, canUndo, onS
             <p className="text-sm text-muted-foreground">{demo
               ? t("这是演示效果，对方没有向你表达喜欢，也不会收到通知。注册并加入推荐池后才能与会员真实互选。")
               : t("你们互相喜欢了。在游戏客户端里加对方好友，一起排位吧。")}</p>
+            {!demo && matched.both_looking_now && <p className="text-sm font-semibold text-good" data-testid="match-looking-now">{t("TA 现在也想打")}</p>}
             <div className="space-y-1">
               {!demo && <div className="text-lg font-semibold" data-testid="match-riot-id">{matched.riot_id}</div>}
               {!demo && matched.discord && <div className="text-sm" data-testid="match-discord">{t("Discord：{name}", { name: matched.discord })}</div>}

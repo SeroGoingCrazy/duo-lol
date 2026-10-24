@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Sparkles } from "lucide-react";
 import DeckStage from "@/components/DeckStage";
+import EmptyPoolPrompt from "@/components/EmptyPoolPrompt";
 import LookupProgress from "@/components/LookupProgress";
 import RiotIdField from "@/components/RiotIdField";
 import SelfReportForm from "@/components/SelfReportForm";
@@ -20,7 +21,7 @@ type DemoFailure =
 const asCard = (p: Partner): DeckCard => ({ ...p, id: cardKey(p) });
 
 /** 找搭子 演示版 (ADR-0008) for visitors who are not yet swiping as a 会员: swipes stay in this browser. */
-export default function DemoDeck({ notice, member = false }: { notice: React.ReactNode; member?: boolean }) {
+export default function DemoDeck({ notice, member = false, boundMember = false }: { notice: React.ReactNode; member?: boolean; boundMember?: boolean }) {
   const info = useChampionInfo();
   const t = useT();
   const [me, setMe] = useState("");
@@ -176,7 +177,13 @@ export default function DemoDeck({ notice, member = false }: { notice: React.Rea
           </div>
         </Alert>}
         {player?.insufficient_data && !busy && !failure && !partners && <SelfReportForm className="max-w-3xl" player={player} champions={champions} initial={draft} onSubmit={(r) => recommend(player, r)} />}
-        {partners && partners.length === 0 && <Alert>{t("推荐池里暂时没有能和你一起排的玩家。")}</Alert>}
+        {partners && partners.length === 0 && <Alert>
+          <p>{t("推荐池里暂时没有能和你一起排的玩家。")}</p>
+          {boundMember && <div className="mt-3 space-y-3">
+            <EmptyPoolPrompt demo refresh={round} />
+            <Button variant="outline" asChild><a href="/#duo-check">{t("和朋友查组合")}</a></Button>
+          </div>}
+        </Alert>}
       </div>
 
       {partners && partners.length > 0 && (
@@ -185,6 +192,7 @@ export default function DemoDeck({ notice, member = false }: { notice: React.Rea
           empty={<>
             <p className="font-semibold">{t("暂时没有更多搭子了")}</p>
             <p className="text-sm text-muted-foreground">{t("推荐池有新玩家时会出现新的卡片。也可以去查组合，直接算你和某个人的分数。")}</p>
+            {boundMember && <EmptyPoolPrompt demo refresh={round} />}
             <div className="flex gap-2">
               <Button variant="outline" asChild><a href="/">{t("去查组合")}</a></Button>
               <Button variant="outline" onClick={restart}>{t("重新开始")}</Button>

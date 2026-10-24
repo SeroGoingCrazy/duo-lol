@@ -15,14 +15,17 @@ export default function Nav({ member }: { member: { name: string; admin?: boolea
   const t = useT();
   // 互选通知: the layout stays mounted across pages, so ask again on every page change and once a minute
   const [unseen, setUnseen] = useState(0);
+  const [lookingNow, setLookingNow] = useState(0);
   useEffect(() => {
     if (!member) return;
     let live = true;
     const check = () => fetch("/api/notifications", { cache: "no-store" }).then((r) => r.json())
-      .then((d) => { if (live) setUnseen(d.unseen ?? 0); }).catch(() => {});
+      .then((d) => { if (live) { setUnseen(d.unseen ?? 0); setLookingNow(d.looking_now ?? 0); } }).catch(() => {});
+    const onVisible = () => { if (document.visibilityState === "visible") void check(); };
     check();
     const timer = setInterval(check, UNSEEN_POLL_MS);
-    return () => { live = false; clearInterval(timer); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => { live = false; clearInterval(timer); document.removeEventListener("visibilitychange", onVisible); };
   }, [member?.name, path]);   // eslint-disable-line react-hooks/exhaustive-deps
   const item = (href: string, label: string, badge = 0) => (
     <Link href={href} aria-current={path === href.split("#")[0] ? "page" : undefined}
@@ -38,6 +41,9 @@ export default function Nav({ member }: { member: { name: string; admin?: boolea
       <a href="/" className="text-neon mr-3 font-bold tracking-tight no-underline">{t("匹配搭子")}</a>
       {item("/#duo-check", t("查组合"))}
       {item("/find", t("找搭子"), path === "/find" ? 0 : unseen)}
+      {member && lookingNow > 0 && <Link href="/find" className="rounded-full px-3 py-1.5 text-xs text-good no-underline hover:underline" data-testid="looking-now-count">
+        {t("现在有 {n} 人想打", { n: lookingNow })}
+      </Link>}
       <div className="ml-auto flex items-center gap-1">
         {/* both languages always visible, the current one highlighted */}
         <div role="group" aria-label="语言 / Language" className="mr-2 flex rounded-full border p-0.5" data-testid="lang-switch">
