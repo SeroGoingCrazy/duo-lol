@@ -2,14 +2,15 @@
 
 A teammate finder for League of Legends players on NA. Check how two players fit together, explore champion combinations, and swipe to find someone to queue with, from match history to a mutual like.
 
-![Duo check: duo score, predicted win rate, suggested roles and best champion pairs](docs/screenshots/duo-check.png)
+![Home page: product introduction with paths to the swipe deck and the free duo check](docs/screenshots/home.png)
 
 *Screenshots show the actual site running locally on synthetic demo data (`data/fake_riot.py`). Players and scores are illustrative.*
 
 ## What's on the site
 
-- **Home and duo check (`/`)**: a product introduction with paths to the swipe demo and a free two-player check. Enter two Riot IDs to see a 0–100 duo score, the predicted win rate, suggested roles and recommended champion pairs. Cold lookups show player identity and rank first, then actual match-loading progress. Copy a link to share the result.
-- **Find a duo (`/find`)**: a swipe deck ranked by predicted win rate. Each card flips through duo score, champion pairs and reasons; swipe, drag or use the arrow keys to like or pass, and undo your last pass. Visitors get a browser-local demo with simulated likes. Logged-in members who link a Riot ID and turn on “Recommend me” swipe real members.
+- **Home and duo check (`/`)**: a product introduction with paths to the swipe deck and a free two-player check. Enter two Riot IDs to see a 0–100 duo score shown as a percentile (“Top 33% of pairs who can queue together”), suggested roles and recommended champion pairs. “How it is calculated” opens the predicted win rate and how far it is above or below your solo average. Cold lookups show player identity and rank first, then actual match-loading progress. Copy a link to share the result.
+- **Find a duo (`/find`)**: a swipe deck ranked by predicted win rate. Each card flips through duo score, the other player's most played champions and champion pairs, and reasons; swipe, drag or use the arrow keys to like or pass, and undo your last pass. Visitors get a browser-local demo where every like, match and count is clearly labelled as simulated. Members who link a Riot ID and opt in swipe real members.
+- **Getting started (`/welcome`)**: right after linking a Riot ID, a two-step setup asks for up to two roles, then for explicit consent to join the recommendation pool, and drops you into the real deck.
 - **Matches**: Riot IDs stay hidden on cards until both members like each other. Matches and “likes you” show next to the deck, with optional Discord DM notifications. Members can block or report, and admins review reports at `/admin`.
 - **Player pages (`/player/Name-NA1`)**: rank, most played champions and recent ranked games, with a shortcut to check your duo with that player. Players with fewer than 20 ranked games can pick their champions and roles by hand.
 - **Accounts**: log in with Discord, link a Riot ID (marked *Unverified* until Riot Sign On is available, see [ADR-0011](docs/adr/0011-bind-riot-id-unverified-until-rso.md)), choose any summoner icon as your avatar, and add a bio, languages, voice preference, play times and a temporary “Looking now” status.
@@ -17,21 +18,23 @@ A teammate finder for League of Legends players on NA. Check how two players fit
 
 Match statistics are scoped to **NA Ranked Solo/Duo (queue 420)**.
 
-| Find a duo | It's a match |
+| Duo check | Find a duo |
 | --- | --- |
-| ![Swipe deck with a suggested duo card](docs/screenshots/find.png) | ![Match dialog revealing the other player's Riot ID](docs/screenshots/match.png) |
+| ![Duo check result: duo score percentile, both players and the best champion pairs](docs/screenshots/duo-check.png) | ![Swipe deck with a suggested duo card and simulated activity](docs/screenshots/find.png) |
 
-| Player page | Log in |
+| Demo match | Two-step setup after linking |
 | --- | --- |
-| ![Player page with most played champions and recent games](docs/screenshots/player.png) | ![Login page](docs/screenshots/login.png) |
+| ![Demo match dialog, labelled as a simulation](docs/screenshots/match.png) | ![Welcome wizard: choose your roles, then join the recommendation pool](docs/screenshots/welcome.png) |
 
-<p align="center"><img src="docs/screenshots/find-phone.png" alt="Swipe deck on a phone" width="300"></p>
+| Player page | On a phone |
+| --- | --- |
+| ![Player page with most played champions and recent games](docs/screenshots/player.png) | <img src="docs/screenshots/find-phone.png" alt="Swipe deck on a phone" width="300"> |
 
 ## How the score works
 
 The prediction model combines player champion proficiency, champion strength, and champion-pair synergy using an Elo-based approach adapted from [DraftGap](https://github.com/vigovlugt/draftgap).
 
-The **duo score** expresses the predicted win rate as a percentile of a fitted distribution of eligible pairs in the recommendation pool with the same two positions ([ADR-0010](docs/adr/0010-score-within-same-positions.md)). The fitted scale is stored in the database, refitted daily and loaded by the API at startup. A score of 50 represents a typical pair in that distribution. It measures how two players fit together; it is not an individual skill or hidden MMR rating, and an 84 duo score does not mean an 84% chance of winning.
+The **duo score** expresses the predicted win rate as a percentile of a fitted distribution of eligible pairs in the recommendation pool with the same two positions ([ADR-0010](docs/adr/0010-score-within-same-positions.md)). The fitted scale is stored in the database, refitted daily and loaded by the API at startup. A score of 50 represents a typical pair in that distribution. The API's `reasons` give each term's effect in win-rate percentage points compared with leaving that term out. It measures how two players fit together; it is not an individual skill or hidden MMR rating, and an 84 duo score does not mean an 84% chance of winning.
 
 Pair statistics cover any two players on the same team, whether they queued together or were matched by the game. See the [model decision](docs/adr/0001-draftgap-style-rating-model.md) and [pair definition](docs/adr/0002-pair-means-any-teammates.md).
 
