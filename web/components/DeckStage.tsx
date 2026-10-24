@@ -15,9 +15,8 @@ import { useT } from "@/components/LangProvider";
 
 /** The 牌堆 on screen, shared by the demo (ADR-0008) and the 会员 deck: card, buttons, keys, sidebar, 互选 dialog.
  *  The parent owns the data; onSwipe resolves to the 互选 card (with Riot ID) when a 喜欢 made one. */
-export default function DeckStage({ remaining, total, mutual, likes, info, canUndo, onSwipe, onUndo, empty, cardActions, mutualActions, paused = false, demo = false }: {
+export default function DeckStage({ remaining, mutual, likes, info, canUndo, onSwipe, onUndo, empty, cardActions, mutualActions, paused = false, demo = false }: {
   remaining: DeckCard[];
-  total: number;
   mutual: DeckCard[];
   likes: DeckCard[];
   info: Record<string, ChampionInfo>;
@@ -35,6 +34,8 @@ export default function DeckStage({ remaining, total, mutual, likes, info, canUn
   const [focus, setFocus] = useState<string | null>(null);   // a card opened from 喜欢我的人 or brought back by 撤销
   const [fling, setFling] = useState<Swipe | null>(null);
   const [matched, setMatched] = useState<DeckCard | null>(null);
+  const matchDialog = useRef<HTMLDivElement>(null);
+  const likeButton = useRef<HTMLButtonElement>(null);
   const cardArea = useRef<HTMLDivElement>(null);
   const visibleCard = useRef<HTMLDivElement>(null);
   const firstCardViewed = useRef(false);
@@ -42,6 +43,31 @@ export default function DeckStage({ remaining, total, mutual, likes, info, canUn
   const likeIds = new Set(likes.map((c) => c.id));
   const top = (focus && remaining.find((c) => c.id === focus)) || remaining[0] || null;
   const behind = remaining.find((c) => c !== top) ?? null;
+
+  useEffect(() => {
+    if (!matched) return;
+    const previous = document.activeElement as HTMLElement | null;
+    const dialog = matchDialog.current;
+    dialog?.querySelector<HTMLButtonElement>("button")?.focus();
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setMatched(null);
+      }
+      if (event.key === "Tab" && dialog) {
+        const buttons = Array.from(dialog.querySelectorAll<HTMLButtonElement>("button:not(:disabled), a[href]"));
+        const first = buttons[0], last = buttons[buttons.length - 1];
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+      }
+    }
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      if (previous?.isConnected && previous !== document.body) previous.focus();
+      else likeButton.current?.focus();
+    };
+  }, [matched]);
 
   // A loaded response is not an impression: wait for a real card in a visible tab's viewport.
   useEffect(() => {
@@ -118,7 +144,7 @@ export default function DeckStage({ remaining, total, mutual, likes, info, canUn
         <div className="swipe-stage min-w-0 rounded-3xl px-1 pb-3 pt-2 sm:px-6 sm:pb-5 sm:pt-4">
           <div className="mx-auto mb-2 flex max-w-[30rem] items-center justify-between px-1 text-xs text-muted-foreground sm:mb-4">
             <span className="font-medium text-foreground">{t("为你推荐")} <span className="ml-2 font-normal text-muted-foreground">{t("按预测胜率排序")}</span></span>
-            <span aria-live="polite">{t("剩余 {n} / {total}", { n: remaining.length, total })}</span>
+            <span aria-live="polite">{remaining.length > 0 && remaining.length < 5 && <span data-testid="deck-remaining">{t("还剩 {n} 张卡片", { n: remaining.length })}</span>}</span>
           </div>
           <div ref={cardArea} className="relative mx-auto h-[clamp(19rem,calc(100dvh-var(--deck-top,16rem)-8rem),35rem)] max-w-[30rem] sm:h-[clamp(19rem,calc(100dvh-var(--deck-top,16rem)-10rem),35rem)]"
             style={{ "--deck-top": cardTop == null ? undefined : `${cardTop}px` } as CSSProperties}>
@@ -148,7 +174,7 @@ export default function DeckStage({ remaining, total, mutual, likes, info, canUn
             <span className="text-xs text-muted-foreground">{t("跳过")}</span>
             </div>
             <div className="flex flex-col items-center gap-1 sm:gap-2">
-            <Button className="size-12 rounded-full bg-good bg-none p-0 text-good-foreground shadow-[0_0_28px_-4px_var(--good)] hover:bg-good/90 sm:size-16" aria-label={t("喜欢")} disabled={!top || !!fling} onClick={() => setFling("like")}>
+            <Button ref={likeButton} className="size-12 rounded-full bg-good bg-none p-0 text-good-foreground shadow-[0_0_28px_-4px_var(--good)] hover:bg-good/90 sm:size-16" aria-label={t("喜欢")} disabled={!top || !!fling} onClick={() => setFling("like")}>
               <Heart className="size-7!" />
             </Button>
             <span className="text-xs text-muted-foreground">{t("喜欢")}</span>
@@ -162,13 +188,14 @@ export default function DeckStage({ remaining, total, mutual, likes, info, canUn
       </div>
 
       {matched && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-labelledby="match-title" data-testid="match-dialog">
+        <div ref={matchDialog} className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-labelledby="match-title" data-testid="match-dialog">
           <motion.div className="w-full max-w-sm" initial={still ? false : { opacity: 0, scale: 0.85 }} animate={{ opacity: 1, scale: 1 }}
             transition={{ type: "spring", stiffness: 320, damping: 22 }}>
-          <Card className="space-y-4 text-center">
-            <h2 id="match-title" className="text-neon text-3xl font-bold">{demo ? (t.lang === "zh" ? "模拟互选" : "Demo match") : t("互选成功")}</h2>
+          <Card className="relative space-y-4 pt-12 text-center">
+            <Button type="button" variant="ghost" size="sm" className="absolute right-2 top-2 size-9 p-0" aria-label={t("关闭")} onClick={() => setMatched(null)}><X /></Button>
+            <h2 id="match-title" className="text-neon text-3xl font-bold">{demo ? t("模拟互选") : t("互选成功")}</h2>
             <p className="text-sm text-muted-foreground">{demo
-              ? (t.lang === "zh" ? "这是演示效果，对方没有向你表达喜欢，也不会收到通知。注册并加入推荐池后才能与会员真实互选。" : "This is a simulation. This player has not liked you and receives no notification. Join the member pool to make real matches.")
+              ? t("这是演示效果，对方没有向你表达喜欢，也不会收到通知。注册并加入推荐池后才能与会员真实互选。")
               : t("你们互相喜欢了。在游戏客户端里加对方好友，一起排位吧。")}</p>
             <div className="space-y-1">
               {!demo && <div className="text-lg font-semibold" data-testid="match-riot-id">{matched.riot_id}</div>}
@@ -177,7 +204,7 @@ export default function DeckStage({ remaining, total, mutual, likes, info, canUn
             </div>
             <div className="flex justify-center gap-2">
               {!demo && matched.riot_id && <CopyButton text={matched.riot_id} />}
-              <Button autoFocus onClick={() => setMatched(null)}>{t("继续滑")}</Button>
+              <Button onClick={() => setMatched(null)}>{t("继续滑")}</Button>
             </div>
           </Card>
           </motion.div>

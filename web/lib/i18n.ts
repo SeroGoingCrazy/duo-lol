@@ -14,7 +14,11 @@ export function pickLang(cookie: string | undefined): Lang {
 }
 
 const EN = new Map<string, string>(Object.entries({
+  // Deck exhaustion and dialog controls
+  "还剩 {n} 张卡片": "{n} cards left",
+  "关闭": "Close",
   "模拟互选": "Demo match",
+  "这是演示效果，对方没有向你表达喜欢，也不会收到通知。注册并加入推荐池后才能与会员真实互选。": "This is a simulation. This player has not liked you and receives no notification. Join the member pool to make real matches.",
 
   // Two-step onboarding
   "完成两步，开始找搭子": "Two steps to find your duo",

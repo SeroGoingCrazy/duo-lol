@@ -15,7 +15,7 @@ async function savePrefs(page: Page, { bio, languages = [], voice }: { bio: stri
   await expect(prefs.getByText("已保存")).toBeVisible();
 }
 
-const cardsLeft = (page: Page) => page.getByText(/剩余 \d+ \/ \d+/);
+const cardsLeft = (page: Page) => page.getByTestId("deck-remaining");
 
 test("简介 and tags show on the card, contact details are refused, filters and 现在想打 narrow the deck", async ({ browser }) => {
   test.setTimeout(240_000);
@@ -33,19 +33,19 @@ test("简介 and tags show on the card, contact details are refused, filters and
 
   // Uma says she's looking now
   await uma.goto("/find");
-  await expect(cardsLeft(uma)).toBeVisible({ timeout: 30_000 });
+  await expect(uma.getByTestId("swipe-card")).toBeVisible({ timeout: 30_000 });
   await uma.getByTestId("looking-toggle").click();
   await expect(uma.getByTestId("looking-toggle")).toHaveAttribute("aria-pressed", "true");
 
   await rosa.goto("/find");
-  await expect(cardsLeft(rosa)).toBeVisible({ timeout: 30_000 });
+  await expect(rosa.getByTestId("swipe-card")).toBeVisible({ timeout: 30_000 });
   const filters = rosa.getByTestId("deck-filters");
   await filters.getByRole("button", { name: "筛选" }).click();
 
   // language filter: only Jade speaks Korean; her card shows her 简介 and tags
   await filters.getByText("한국어", { exact: true }).click();
   await expect(rosa.getByTestId("card-profile")).toContainText("主玩辅助，晚上打", { timeout: 30_000 });
-  await expect(cardsLeft(rosa)).toHaveText("剩余 1 / 1");
+  await expect(cardsLeft(rosa)).toHaveText("还剩 1 张卡片");
   await expect(rosa.getByTestId("card-profile")).toContainText("한국어 · 开麦");
   expect((await (await rosa.request.get("/api/deck")).json()).empty_reason).toBeNull();
 
@@ -53,7 +53,7 @@ test("简介 and tags show on the card, contact details are refused, filters and
   await filters.getByText("한국어", { exact: true }).click();
   await filters.getByText("现在想打", { exact: true }).click();
   await expect(rosa.getByTestId("card-profile")).toContainText("Chill jungler", { timeout: 30_000 });
-  await expect(cardsLeft(rosa)).toHaveText("剩余 1 / 1");
+  await expect(cardsLeft(rosa)).toHaveText("还剩 1 张卡片");
   await expect(rosa.getByTestId("looking-badge")).toBeVisible();
 
   // filters are saved: still on after a reload, and nobody left once both are on

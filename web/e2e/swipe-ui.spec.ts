@@ -83,7 +83,7 @@ test("short drag springs back, vertical reading does not swipe, deliberate swipe
   await page.mouse.move(x - box.width * 0.4, y, { steps: 10 });
   await page.mouse.up();
   await expect(card.getByTestId("score")).toHaveText("42分");
-  await expect(page.getByText("剩余 2 / 3")).toBeVisible();
+  await expect(page.getByTestId("deck-remaining")).toHaveText("还剩 2 张卡片");
 });
 
 for (const [colorScheme, width, height] of [["light", 390, 844], ["dark", 390, 844], ["light", 375, 667]] as const) {
@@ -157,3 +157,37 @@ test("desktop card has a readable width and a secondary sidebar", async ({ page 
   }
   await page.screenshot({ path: "test-results/swipe-desktop.png", fullPage: true });
 });
+
+test("large decks hide the counter until fewer than five cards remain", async ({ page }) => {
+  await openDeck(page);
+  await page.route("**/api/recommendations", (route) => route.fulfill({ json: {
+    partners: Array.from({ length: 6 }, (_, i) => ({ ...partners[1], riot_id: `Pool${i}#NA1` })), notes: [],
+  } }));
+  await page.reload();
+  await expect(page.getByTestId("swipe-card")).toBeVisible();
+  await expect(page.getByTestId("deck-remaining")).toHaveCount(0);
+  await page.getByRole("button", { name: "跳过", exact: true }).click();
+  await expect(page.getByRole("button", { name: "撤销上一次跳过" })).toBeEnabled();
+  await expect(page.getByTestId("deck-remaining")).toHaveCount(0);
+  await page.getByRole("button", { name: "跳过", exact: true }).click();
+  await expect(page.getByTestId("deck-remaining")).toHaveText("还剩 4 张卡片");
+});
+
+for (const close of ["button", "Escape"] as const) {
+  test(`match dialog dismisses with ${close} and restores keyboard focus`, async ({ page }) => {
+    await openDeck(page);
+    const like = page.getByRole("button", { name: "喜欢", exact: true });
+    await like.click();
+    const dialog = page.getByTestId("match-dialog");
+    await expect(dialog).toBeVisible();
+    const closeButton = dialog.getByRole("button", { name: "关闭", exact: true });
+    await closeButton.focus();
+    await page.keyboard.press("Shift+Tab");
+    await expect(dialog.getByRole("button", { name: "继续滑" })).toBeFocused();
+    if (close === "button") await closeButton.click();
+    else await page.keyboard.press("Escape");
+    await expect(dialog).toHaveCount(0);
+    await expect(like).toBeFocused();
+    await expect(page.getByTestId("swipe-card").getByTestId("score")).toHaveText("42分");
+  });
+}

@@ -12,7 +12,7 @@ test("a 喜欢 and a 互选 show in the nav until 找搭子 is opened, and the �
   const b = await member(browser, "duob", "DuoB#NA1");
 
   await a.goto("/find");
-  await expect(a.getByText(/剩余 \d+ \/ \d+/)).toHaveText("剩余 1 / 1", { timeout: 30_000 });
+  await expect(a.getByTestId("deck-remaining")).toHaveText("还剩 1 张卡片", { timeout: 30_000 });
   await a.getByRole("button", { name: "喜欢", exact: true }).click();
   await expect(a.getByTestId("deck-empty")).toBeVisible();
 

@@ -180,7 +180,7 @@ export default function DemoDeck({ notice, member = false }: { notice: React.Rea
       </div>
 
       {partners && partners.length > 0 && (
-        <DeckStage key={round} demo remaining={remaining} total={partners.length} mutual={mutual} likes={likes} info={info}
+        <DeckStage key={round} demo remaining={remaining} mutual={mutual} likes={likes} info={info}
           canUndo={!!log.lastPass} onSwipe={swiped} onUndo={undo}
           empty={<>
             <p className="font-semibold">{t("暂时没有更多搭子了")}</p>
